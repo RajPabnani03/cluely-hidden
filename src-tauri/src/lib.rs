@@ -9,9 +9,9 @@ mod window;
 mod ipc;
 mod settings;
 
-use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+use crate::window::helpers;
 use crate::window::overlay;
 use crate::window::tray;
 use crate::settings::SettingsState;
@@ -27,12 +27,11 @@ pub fn run() {
 
     tauri::Builder::default()
         // ---------- Plugins ----------
-        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        if let Err(e) = overlay::toggle(app) {
+                        if let Err(e) = helpers::toggle(app) {
                             log::error!("toggle_overlay failed: {e:#}");
                         }
                     }
@@ -44,7 +43,7 @@ pub fn run() {
         // ---------- Setup ----------
         .setup(|app| {
             // Create the overlay window (hidden by default)
-            overlay::create(app.handle())?;
+            overlay::create(&app.handle())?;
 
             // Create the tray icon
             tray::create(app.handle())?;

@@ -33,13 +33,7 @@
     "security": {
       "csp": null
     },
-    "macOSPrivateApi": true,
-    "trayIcon": {
-      "iconPath": "icons/tray-icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false,
-      "tooltip": "Cluely Hidden"
-    }
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

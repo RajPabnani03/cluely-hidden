@@ -1,7 +1,6 @@
 //! User-facing settings, persisted via `tauri-plugin-store`.
 
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 
 use crate::config::DEFAULT_HOTKEY;
 use crate::error::Result;

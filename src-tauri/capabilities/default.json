@@ -20,7 +20,6 @@
     "core:app:default",
     "core:app:allow-version",
     "core:app:allow-name",
-    "global-shortcut:default",
-    "store:default"
+    "global-shortcut:default"
   ]
 }

@@ -6,23 +6,24 @@ use tauri::AppHandle;
 
 use crate::error::Result;
 use crate::settings::{AppSettings, SettingsState};
-use crate::window::{helpers, overlay};
+use crate::window::helpers;
+use crate::window::overlay;
 
 // ---------- Window ----------
 
 #[tauri::command]
 pub fn toggle_overlay(app: AppHandle) -> Result<()> {
-    overlay::toggle(&app)
+    helpers::toggle(&app)
 }
 
 #[tauri::command]
 pub fn show_overlay(app: AppHandle) -> Result<()> {
-    overlay::show(&app)
+    helpers::show(&app)
 }
 
 #[tauri::command]
 pub fn hide_overlay(app: AppHandle) -> Result<()> {
-    overlay::hide(&app)
+    helpers::hide(&app)
 }
 
 #[tauri::command]
