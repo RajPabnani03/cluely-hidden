@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Cluely Hidden",
+  "version": "0.1.0",
+  "identifier": "com.cluelyhidden.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Cluely Hidden",
+        "width": 420,
+        "height": 600,
+        "minWidth": 360,
+        "minHeight": 480,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "visible": false,
+        "fullscreen": false,
+        "shadow": true,
+        "titleBarStyle": "Overlay"
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "macOSPrivateApi": true,
+    "trayIcon": {
+      "iconPath": "icons/tray-icon.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false,
+      "tooltip": "Cluely Hidden"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Productivity",
+    "shortDescription": "Stealth AI assistant overlay for macOS",
+    "longDescription": "A lightweight, always-available AI assistant that lives in a stealth overlay. Local-first. Grows on your data. Press ⌘+Shift+Space to summon.",
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "frameworks": [],
+      "entitlements": null,
+      "exceptionDomain": null
+    }
+  }
+}
