@@ -1,79 +1,124 @@
 import { useEffect } from "react";
-import {
-  onOverlayVisibilityChange,
-  onClearSensitiveData,
-  toggleOverlay as tauriToggleOverlay,
-} from "./lib/tauri";
 import { useOverlayStore } from "./lib/store";
+import { useRouter } from "./lib/router";
 import { syncBuiltinProfilesToDb } from "./lib/profiles";
-import { Overlay } from "./routes/Overlay";
+import { Sidebar } from "./components/Sidebar";
+import { MainView } from "./routes/views/MainView";
+import { AssistantView } from "./routes/views/AssistantView";
+import { OnboardingView } from "./routes/views/OnboardingView";
+import { CustomizeView } from "./routes/views/CustomizeView";
+import { AICustomizeView } from "./routes/views/AICustomizeView";
+import { HistoryView } from "./routes/views/HistoryView";
+import { HelpView } from "./routes/views/HelpView";
+import { onOverlayVisibilityChange, onClearSensitiveData } from "./lib/tauri";
 import { DevPanel } from "./components/DevPanel";
 
+/**
+ * Single-window, multi-view app.
+ *
+ * The window is a flex row: 60px Sidebar + flex-1 active view.
+ * The view is driven by `useRouter()` (zustand). Onboarding is gated:
+ * when the overlay becomes visible and the user hasn't onboarded yet,
+ * we route them to the Onboarding view automatically.
+ *
+ * Production: only renders content when the overlay is visible. The
+ * overlay window itself is a separate Tauri webview; when it's hidden
+ * the app returns null.
+ *
+ * Dev mode: a small DevPanel is rendered alongside so the developer can
+ * toggle visibility without leaving the main window.
+ */
 export default function App() {
   const visible = useOverlayStore((s) => s.visible);
-  const setVisible = useOverlayStore((s) => s.setVisible);
+  const currentView = useRouter((s) => s.currentView);
+  const hasOnboarded = useRouter((s) => s.hasOnboarded);
+  const setView = useRouter((s) => s.setView);
+
   const loadHotkeyBindings = useOverlayStore((s) => s.loadHotkeyBindings);
   const resetSensitiveState = useOverlayStore((s) => s.resetSensitiveState);
+  const setVisible = useOverlayStore((s) => s.setVisible);
 
-  // Listen for visibility events from Rust (hotkey / tray)
+  // Initial loads — hotkey bindings + builtin profile prompts
+  useEffect(() => {
+    loadHotkeyBindings();
+    syncBuiltinProfilesToDb();
+  }, [loadHotkeyBindings]);
+
+  // Onboarding gate — first time the overlay opens, force-routes to the wizard
+  useEffect(() => {
+    if (visible && !hasOnboarded) {
+      setView("onboarding");
+    }
+  }, [visible, hasOnboarded, setView]);
+
+  // Visibility event from Rust (hotkey / tray)
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    onOverlayVisibilityChange((v) => setVisible(v)).then((fn) => {
-      unlisten = fn;
-    });
+    onOverlayVisibilityChange((v) => setVisible(v))
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(console.error);
     return () => {
       unlisten?.();
     };
   }, [setVisible]);
 
-  // Listen for emergency erase — wipe in-memory state
+  // Emergency erase — wipe in-memory state, go to main view
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     onClearSensitiveData(() => {
       console.warn("emergency erase: clearing sensitive frontend state");
       resetSensitiveState();
-    }).then((fn) => {
-      unlisten = fn;
-    });
+      setView("main");
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(console.error);
     return () => {
       unlisten?.();
     };
-  }, [resetSensitiveState]);
+  }, [resetSensitiveState, setView]);
 
-  // Load hotkey bindings on mount
-  useEffect(() => {
-    loadHotkeyBindings();
-  }, [loadHotkeyBindings]);
+  // Hidden: don't render anything
+  if (!visible) return null;
 
-  // Back-fill the 6 builtin profile system prompts into SQLite on every launch.
-  // Idempotent — only updates rows whose system_prompt is empty.
-  useEffect(() => {
-    syncBuiltinProfilesToDb();
-  }, []);
+  // Pick the active view component
+  const View = {
+    main: MainView,
+    assistant: AssistantView,
+    onboarding: OnboardingView,
+    customize: CustomizeView,
+    "ai-customize": AICustomizeView,
+    history: HistoryView,
+    help: HelpView,
+  }[currentView];
 
-  // Dev-only escape hatch: dev panel in the corner of the main window
+  // Dev escape hatch: a small panel so the dev can toggle the overlay
+  // without leaving the page. In production this is unused.
   if (import.meta.env.DEV) {
     return (
       <>
-        <div className="min-h-screen bg-background text-foreground p-8">
-          <h1 className="text-2xl font-semibold mb-2">Cluely Hidden</h1>
-          <p className="text-muted-foreground text-sm mb-6">
-            Dev mode. The overlay is a separate Tauri window — toggle it with
-            the hotkey or the button below.
-          </p>
-          <button
-            onClick={() => tauriToggleOverlay()}
-            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            Toggle Overlay
-          </button>
+        <div className="flex h-screen w-screen bg-zinc-900 text-zinc-100">
+          <Sidebar />
+          <main className="flex-1 overflow-auto">
+            <View />
+          </main>
+        </div>
+        <div className="fixed bottom-4 right-4 w-72 z-50">
           <DevPanel />
         </div>
-        {visible && <Overlay />}
       </>
     );
   }
 
-  // Production: only render the overlay (main window is hidden)
-  return visible ? <Overlay /> : null;
+  return (
+    <div className="flex h-screen w-screen bg-zinc-900 text-zinc-100">
+      <Sidebar />
+      <main className="flex-1 overflow-auto">
+        <View />
+      </main>
+    </div>
+  );
 }
