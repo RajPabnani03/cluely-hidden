@@ -77,7 +77,7 @@ impl HotkeyAction {
     pub fn default_key(&self) -> &'static str {
         match self {
             Self::ToggleVisibility => "CmdOrCtrl+Backslash",
-            Self::NextStep => "CmdOrCtrl+Return",
+            Self::NextStep => "CmdOrCtrl+Enter",
             Self::EmergencyErase => "CmdOrCtrl+Shift+E",
             Self::ToggleClickThrough => "CmdOrCtrl+M",
             Self::MoveUp => "Alt+Up",
