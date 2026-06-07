@@ -1,9 +1,9 @@
 //! The 11 hotkey actions and their handlers.
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager};
 
-use crate::error::{AppError, Result};
+use crate::error::Result;
 use crate::window::helpers;
 
 /// 11 actions the user can hotkey. Each has a default binding per platform.
@@ -116,7 +116,7 @@ pub fn from_action_id(id: &str) -> Option<HotkeyAction> {
 }
 
 /// Handle a hotkey action. Called by the registry when a key is pressed.
-pub fn handle<R: Runtime>(action: HotkeyAction, app: &AppHandle<R>) -> Result<()> {
+pub fn handle(action: HotkeyAction, app: &AppHandle) -> Result<()> {
     match action {
         HotkeyAction::ToggleVisibility => helpers::toggle(app),
         HotkeyAction::NextStep => {
@@ -145,7 +145,7 @@ pub fn handle<R: Runtime>(action: HotkeyAction, app: &AppHandle<R>) -> Result<()
 }
 
 /// Move the overlay window by 10% of the smaller screen dimension in the given direction.
-fn move_window<R: Runtime>(app: &AppHandle<R>, direction: &str) -> Result<()> {
+fn move_window(app: &AppHandle, direction: &str) -> Result<()> {
     let Some(win) = app.get_webview_window(crate::window::overlay::OVERLAY_LABEL) else {
         return Ok(());
     };
@@ -177,7 +177,7 @@ fn move_window<R: Runtime>(app: &AppHandle<R>, direction: &str) -> Result<()> {
 }
 
 /// PANIC BUTTON — hides the window, emits clear event, sleeps 300ms, quits the app.
-fn emergency_erase<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
+fn emergency_erase(app: &AppHandle) -> Result<()> {
     log::warn!("EMERGENCY ERASE triggered");
 
     // 1. Hide the overlay window immediately
@@ -200,9 +200,4 @@ fn emergency_erase<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
 /// Find a HotkeyAction by its key string (for unregistration lookups)
 pub fn from_key<'a>(key: &'a str) -> Option<HotkeyAction> {
     HotkeyAction::all().iter().find(|a| a.default_key() == key).copied()
-}
-
-/// Custom error for hotkey operations
-pub fn unknown_action_error(action: &str) -> AppError {
-    AppError::Other(format!("unknown hotkey action: {action}"))
 }

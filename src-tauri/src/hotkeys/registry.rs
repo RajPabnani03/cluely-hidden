@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::AppHandle;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use crate::error::Result;
@@ -43,7 +43,7 @@ impl HotkeyRegistry {
     ///
     /// Uses `on_shortcut` per-key so each handler knows which action it serves.
     /// Existing registrations for these keys are replaced by the plugin.
-    pub fn register_all<R: Runtime>(&self, app: &AppHandle<R>) -> Result<()> {
+    pub fn register_all(&self, app: &AppHandle) -> Result<()> {
         for (action, key) in &self.bindings {
             let action_id = action.action_id();
             let key_owned = key.clone();
@@ -78,7 +78,7 @@ impl HotkeyRegistry {
     }
 
     /// Unregister all current hotkeys
-    pub fn unregister_all<R: Runtime>(&self, app: &AppHandle<R>) -> Result<()> {
+    pub fn unregister_all(&self, app: &AppHandle) -> Result<()> {
         for key in self.bindings.values() {
             let shortcut: Shortcut = key
                 .parse()
@@ -91,9 +91,9 @@ impl HotkeyRegistry {
 
     /// Rebind a single action to a new key. Unregisters the old key (if different),
     /// updates the map, and registers the new key.
-    pub fn rebind<R: Runtime>(
+    pub fn rebind(
         &mut self,
-        app: &AppHandle<R>,
+        app: &AppHandle,
         action: HotkeyAction,
         new_key: String,
     ) -> Result<()> {

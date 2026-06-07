@@ -10,11 +10,9 @@ mod ipc;
 mod settings;
 mod hotkeys;
 
-use tauri_plugin_global_shortcut::ShortcutState;
+use tauri::Manager;
 
 use crate::hotkeys::registry::HotkeyState;
-use crate::window::helpers;
-use crate::window::overlay;
 use crate::window::tray;
 use crate::settings::SettingsState;
 
@@ -66,12 +64,10 @@ pub fn run() {
             tray::create(app.handle())?;
 
             // Register all 11 hotkeys via the registry
-            {
-                let state = app.state::<HotkeyState>();
-                let registry = state.0.lock().expect("hotkey mutex poisoned");
-                if let Err(e) = registry.register_all(app.handle()) {
-                    log::error!("failed to register hotkeys: {e:#}");
-                }
+            let registry = app.state::<HotkeyState>();
+            let registry = registry.0.lock().expect("hotkey mutex poisoned");
+            if let Err(e) = registry.register_all(app.handle()) {
+                log::error!("failed to register hotkeys: {e:#}");
             }
 
             log::info!("setup complete");
