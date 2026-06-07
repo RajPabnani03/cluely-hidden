@@ -22,6 +22,12 @@ pub enum AppError {
     #[error("settings error: {0}")]
     Settings(String),
 
+    #[error("database error: {0}")]
+    Database(String),
+
+    #[error("rusqlite error: {0}")]
+    Rusqlite(#[from] rusqlite::Error),
+
     #[error("{0}")]
     Other(String),
 }

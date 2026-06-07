@@ -4,6 +4,7 @@
 //! and installs the global hotkey + tray icon.
 
 mod config;
+mod db;
 mod error;
 mod window;
 mod ipc;
@@ -16,6 +17,7 @@ use crate::hotkeys::registry::HotkeyState;
 use crate::window::overlay;
 use crate::window::tray;
 use crate::settings::SettingsState;
+use crate::db::DbState;
 
 pub fn run() {
     // Initialize logging (controlled by RUST_LOG env var)
@@ -37,6 +39,20 @@ pub fn run() {
         .manage(HotkeyState::default())
         // ---------- Setup ----------
         .setup(|app| {
+            // ---------- Phase 3A — Database ----------
+            // Open (or create) the SQLite database, apply migrations, seed
+            // the 6 builtin profiles, and stash the connection in managed
+            // state so IPC commands can grab it with `tauri::State<DbState>`.
+            let db_path = config::data_dir().join("cluely.db");
+            let conn = db::open(&db_path).map_err(|e| {
+                log::error!("failed to open db at {}: {e:#}", db_path.display());
+                e
+            })?;
+            db::migrate(&conn)?;
+            db::seed_builtin_profiles(&conn)?;
+            app.manage(DbState(std::sync::Mutex::new(conn)));
+            log::info!("database initialized at {}", db_path.display());
+
             // ---------- Phase 1 — P0 Stealth ----------
             // On macOS, set the activation policy to Accessory BEFORE creating
             // the overlay window. This hides the app from the Dock and the
@@ -87,6 +103,20 @@ pub fn run() {
             ipc::commands::chat,
             ipc::commands::get_hotkey_bindings,
             ipc::commands::rebind_hotkey,
+            // ---- Phase 3A — Database ----
+            ipc::commands::list_profiles,
+            ipc::commands::get_profile,
+            ipc::commands::create_profile,
+            ipc::commands::update_profile,
+            ipc::commands::delete_profile,
+            ipc::commands::list_conversations,
+            ipc::commands::create_conversation,
+            ipc::commands::update_conversation_title,
+            ipc::commands::delete_conversation,
+            ipc::commands::list_messages,
+            ipc::commands::save_message,
+            ipc::commands::create_capture,
+            ipc::commands::get_capture,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

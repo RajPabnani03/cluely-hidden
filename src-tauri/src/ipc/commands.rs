@@ -4,6 +4,7 @@
 
 use tauri::AppHandle;
 
+use crate::db::DbState;
 use crate::error::Result;
 use crate::settings::{AppSettings, SettingsPatch, SettingsState};
 use crate::hotkeys::actions;
@@ -111,4 +112,143 @@ pub struct ChatOutput {
     pub role: String,
     pub content: String,
     pub created_at: i64,
+}
+
+// ---------- Phase 3A — Database (profiles / conversations / messages / captures) ----------
+//
+// Each command takes `state: tauri::State<'_, DbState>`, locks the
+// connection, and delegates to a pure function in `crate::db::*`. This
+// keeps the IPC layer thin and the db functions testable in isolation.
+
+/// Lock the shared DB connection. Centralized so every command panics
+/// with the same message if the mutex is poisoned.
+fn conn<'a>(state: &'a tauri::State<'_, DbState>) -> std::sync::MutexGuard<'a, rusqlite::Connection> {
+    state.0.lock().expect("db mutex poisoned")
+}
+
+// ---- Profiles ----
+
+#[tauri::command]
+pub fn list_profiles(state: tauri::State<'_, DbState>) -> Result<Vec<crate::db::profiles::Profile>> {
+    crate::db::profiles::list(&conn(&state))
+}
+
+#[tauri::command]
+pub fn get_profile(
+    state: tauri::State<'_, DbState>,
+    id: String,
+) -> Result<Option<crate::db::profiles::Profile>> {
+    crate::db::profiles::get(&conn(&state), &id)
+}
+
+#[tauri::command]
+pub fn create_profile(
+    state: tauri::State<'_, DbState>,
+    name: String,
+    system_prompt: String,
+) -> Result<crate::db::profiles::Profile> {
+    crate::db::profiles::create(&conn(&state), name, system_prompt)
+}
+
+#[tauri::command]
+pub fn update_profile(
+    state: tauri::State<'_, DbState>,
+    id: String,
+    name: Option<String>,
+    system_prompt: Option<String>,
+) -> Result<crate::db::profiles::Profile> {
+    crate::db::profiles::update(&conn(&state), &id, name, system_prompt)
+}
+
+#[tauri::command]
+pub fn delete_profile(state: tauri::State<'_, DbState>, id: String) -> Result<()> {
+    crate::db::profiles::delete(&conn(&state), &id)
+}
+
+// ---- Conversations ----
+
+#[tauri::command]
+pub fn list_conversations(
+    state: tauri::State<'_, DbState>,
+) -> Result<Vec<crate::db::conversations::Conversation>> {
+    crate::db::conversations::list(&conn(&state))
+}
+
+#[tauri::command]
+pub fn create_conversation(
+    state: tauri::State<'_, DbState>,
+    profile_id: Option<String>,
+) -> Result<crate::db::conversations::Conversation> {
+    crate::db::conversations::create(&conn(&state), profile_id)
+}
+
+#[tauri::command]
+pub fn update_conversation_title(
+    state: tauri::State<'_, DbState>,
+    id: String,
+    title: String,
+) -> Result<()> {
+    crate::db::conversations::update_title(&conn(&state), &id, title)
+}
+
+#[tauri::command]
+pub fn delete_conversation(state: tauri::State<'_, DbState>, id: String) -> Result<()> {
+    crate::db::conversations::delete(&conn(&state), &id)
+}
+
+// ---- Messages ----
+
+#[tauri::command]
+pub fn list_messages(
+    state: tauri::State<'_, DbState>,
+    conversation_id: String,
+) -> Result<Vec<crate::db::messages::Message>> {
+    crate::db::messages::list_for_conversation(&conn(&state), &conversation_id)
+}
+
+#[tauri::command]
+pub fn save_message(
+    state: tauri::State<'_, DbState>,
+    conversation_id: String,
+    role: String,
+    content: String,
+    audio_transcript: Option<String>,
+    screenshot_id: Option<String>,
+    model: Option<String>,
+) -> Result<crate::db::messages::Message> {
+    let message = crate::db::messages::create(
+        &conn(&state),
+        conversation_id,
+        role,
+        content,
+        audio_transcript,
+        screenshot_id,
+        model,
+    )?;
+    // Bump the parent conversation's `updated_at` so it floats to the top
+    // of the sidebar. Failure here is non-fatal — the message is saved.
+    let _ = crate::db::conversations::touch(&conn(&state), &message.conversation_id);
+    Ok(message)
+}
+
+// ---- Captures ----
+
+#[tauri::command]
+pub fn create_capture(
+    state: tauri::State<'_, DbState>,
+    kind: String,
+    file_path: String,
+    width: Option<i32>,
+    height: Option<i32>,
+    duration_ms: Option<i64>,
+) -> Result<crate::db::captures::Capture> {
+    crate::db::captures::create(&conn(&state), kind, file_path, width, height, duration_ms)
+}
+
+#[tauri::command]
+pub fn get_capture(
+    state: tauri::State<'_, DbState>,
+    id: String,
+) -> Result<Option<crate::db::captures::Capture>> {
+    crate::db::captures::get(&conn(&state), &id)
 }

@@ -27,6 +27,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
 env_logger = "0.11"
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [features]
 # This feature is used for production builds or when `devUrl` points to the filesystem
