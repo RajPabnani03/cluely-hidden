@@ -1,97 +1,193 @@
-# Cluely-Hidden — Architecture
+# Cluely-Hidden — Architecture v0.2.0
 
-> **Mission:** A lightweight, stealth AI assistant overlay for macOS. Always there, never in the way, learns from you.
-> **Codename:** `cluely-hidden`
-> **Tagline:** "Slick. To the point. Yours."
-
----
-
-## 1. Product Principles
-
-1. **Stealth by default** — invisible until summoned (⌘+Shift+Space), never steals focus, never logs keystrokes it doesn't need.
-2. **Local-first, private by design** — your data never leaves the machine unless you explicitly ask.
-3. **Grows on your data** — every interaction enriches the local memory graph; the assistant gets smarter about *you* over time.
-4. **Slick, not showy** — fewer animations, sharper typography, native macOS feel.
-5. **One binary, one process** — no Electron-style bloat. Tauri 2 keeps us under 15MB.
+> **Mission:** A lightweight, **stealth** AI assistant overlay for macOS. Completely invisible in screen-share, screen recordings, screenshots, and the Dock. Summoned by hotkey, dismissed by hotkey. Powered by Google Gemini. Inspired by Pluely.
+>
+> **Stack:** Tauri 2.11 + React 18 + TypeScript + Tailwind + Zustand + SQLite (rusqlite) + Gemini API
+>
+> **Tagline:** "Slick. To the point. Undetectable."
 
 ---
 
-## 2. Tech Stack (Locked)
+## 1. The Three Non-Negotiables (P0)
 
-| Layer | Choice | Why |
+1. **🔒 Invisible in screen-share** — Zoom, Meet, Teams, Discord, QuickTime, macOS screenshot. Uses `content_protected(true)` on macOS.
+2. **👻 Hidden from Dock + Cmd+Tab** — `skip_taskbar(true)`, no `LSUIElement: false`. Tray icon is the only presence.
+3. **⚡ Hotkey-only** — `⌘+Shift+Space` shows, same again hides. No window in app switcher when hidden.
+
+## 2. What We Steal From Pluely
+
+| Feature | Pluely impl | Our impl |
 |---|---|---|
-| **Shell / Native** | Tauri 2 (Rust) | 5-15MB binary, native macOS APIs, no Chromium bundled |
-| **UI** | React 18 + TypeScript + Vite | Hot reload, type safety, huge ecosystem |
-| **Styling** | Tailwind CSS + shadcn/ui | Fast, consistent, dark-mode-first |
-| **State** | Zustand | Tiny (~1KB), no boilerplate |
-| **Local DB** | SQLite via `rusqlite` (Rust) + Drizzle ORM (TS) | Structured memory, vector search via `sqlite-vss` |
-| **Embeddings** | `fastembed-rs` (Rust bindings for fastembed) | Local embeddings, no API call |
-| **LLM (local)** | Ollama (HTTP) — `llama3.2:3b` for fast, `llama3.1:8b` for smart | Free, private, runs on Apple Silicon natively |
-| **LLM (cloud, optional)** | OpenAI-compatible API endpoint | User-provided key, opt-in only |
-| **Screen capture** | macOS ScreenCaptureKit via Tauri plugin | Native, low overhead, captures any window |
-| **Audio capture** | `cpal` (Rust) + `whisper-rs` for STT | Local, private speech-to-text |
-| **Global hotkey** | `tauri-plugin-global-shortcut` | Native hotkey registration |
-| **Tray icon** | `tauri-plugin-tray` | Menu bar presence |
-| **Packaging** | `tauri build` → `.app` → `create-dmg` → signed + notarized | Standard macOS distribution |
-| **CI** | GitHub Actions (later) | For now: local builds |
+| `content_protected(true)` | ✅ in `window.rs:create_dashboard_window` | ✅ port verbatim |
+| Multi-hotkey dispatch | ✅ in `shortcuts.rs:handle_shortcut_action` | ✅ port action_id pattern |
+| 7 system prompts | ✅ in `lib/platform-instructions.ts` | ✅ port all 7 verbatim |
+| AI provider plugin (curl templates) | ✅ in `config/ai-providers.constants.ts` | ✅ port + add Gemini explicitly |
+| VAD-based push-to-talk | ✅ in `hooks/useSystemAudio.ts` | ✅ port VAD config |
+| Screen capture overlay | ✅ in `capture.rs` (xcap) | ✅ port xcap usage |
+| Tauri-nspanel for macOS | ✅ | ❌ skip — too heavy, we use WebviewWindow |
+| License/activation system | ✅ | ❌ skip — we're open source, no payment |
 
----
+## 3. Tech Stack (Locked)
 
-## 3. System Architecture
+| Layer | Choice | Notes |
+|---|---|---|
+| Shell | Tauri 2.11 (Rust) | macos-private-api, tray-icon, image-png features |
+| UI | React 18 + TypeScript + Vite | Same as Pluely |
+| Styling | Tailwind 3 + shadcn-style tokens | Dark-mode first |
+| State | Zustand 5 | Tiny, no boilerplate |
+| DB | SQLite via rusqlite (bundled) | Conversations, prompts, captures |
+| AI | **Google Gemini API** (gemini-2.0-flash default) | Via OpenAI-compat endpoint OR native |
+| HTTP | reqwest (Rust) | For Gemini streaming |
+| Capture | xcap (Rust) | Cross-platform screen capture |
+| Hotkeys | tauri-plugin-global-shortcut | Native |
+| Tray | tauri::tray (core) | No separate plugin |
+| Streaming | Server-Sent Events from Gemini | Or just chunked HTTP |
+
+## 4. System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  macOS Desktop                                                  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  cluely-hidden.app  (Tauri 2 / Rust core)                │   │
-│  │                                                          │   │
-│  │  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │   │
-│  │  │ Tray Icon   │  │ Overlay Win  │  │ Settings Win   │  │   │
-│  │  │ (NSStatus)  │  │ (Webview)    │  │ (Webview)      │  │   │
-│  │  └─────┬───────┘  └──────┬───────┘  └────────┬───────┘  │   │
-│  │        │                 │                   │          │   │
-│  │        └────────┬────────┴───────────────────┘          │   │
-│  │                 │  Tauri IPC (typed events)              │   │
-│  │                 ▼                                        │   │
-│  │  ┌──────────────────────────────────────────────────┐   │   │
-│  │  │  Rust Core Services                              │   │   │
-│  │  │  ┌────────────┐ ┌────────────┐ ┌──────────────┐  │   │   │
-│  │  │  │ Hotkey Mgr │ │ Window Mgr │ │ Capture Mgr  │  │   │   │
-│  │  │  └────────────┘ └────────────┘ └──────────────┘  │   │   │
-│  │  │  ┌────────────┐ ┌────────────┐ ┌──────────────┐  │   │   │
-│  │  │  │ Audio Mgr  │ │ AI Router  │ │ Memory Store │  │   │   │
-│  │  │  └────────────┘ └────────────┘ └──────────────┘  │   │   │
-│  │  └──────────────────────────────────────────────────┘   │   │
-│  │                 │                                        │   │
-│  └─────────────────┼────────────────────────────────────────┘   │
-│                    │                                            │
-│   ┌────────────────┼─────────────────┐                          │
-│   ▼                ▼                 ▼                          │
-│  ~/Library/     Ollama          Hermes Agent                    │
-│  Application    (localhost:    (optional, v0.3)                 │
-│  Support/       11434)                                          │
-│  cluely-                                                         │
-│  hidden/                                                         │
-│   ├── db.sqlite                                                  │
-│   ├── embeddings/                                                │
-│   └── memory/                                                    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  macOS Desktop                                                      │
+│                                                                     │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │  cluely-hidden.app  (Tauri 2 / Rust core)                     │  │
+│  │                                                               │  │
+│  │  ┌──────────────┐  ┌────────────────┐  ┌──────────────────┐  │  │
+│  │  │ Tray Icon    │  │ Overlay Window │  │ Settings Window  │  │  │
+│  │  │ (NSStatus)   │  │ (Webview)      │  │ (Webview)        │  │  │
+│  │  │              │  │ content-       │  │ (when opened)    │  │  │
+│  │  │              │  │ protected=true │  │                  │  │  │
+│  │  └──────┬───────┘  └────────┬───────┘  └────────┬─────────┘  │  │
+│  │         │                   │ Tauri IPC (typed) │            │  │
+│  │         └───────────────────┼───────────────────┘            │  │
+│  │                             ▼                                │  │
+│  │  ┌──────────────────────────────────────────────────────┐   │  │
+│  │  │  Rust Core                                            │   │  │
+│  │  │  ┌────────────┐ ┌──────────────┐ ┌────────────────┐  │   │  │
+│  │  │  │ Hotkey Mgr │ │ Window Mgr   │ │ Capture Mgr    │  │   │  │
+│  │  │  │ (7 actions)│ │ (show/hide)  │ │ (xcap + audio) │  │   │  │
+│  │  │  └────────────┘ └──────────────┘ └────────────────┘  │   │  │
+│  │  │  ┌────────────┐ ┌──────────────┐ ┌────────────────┐  │   │  │
+│  │  │  │ AI Router  │ │ Memory Store │ │ Prompt Engine  │  │   │  │
+│  │  │  │ (Gemini)   │ │ (SQLite)     │ │ (7 templates)  │  │   │  │
+│  │  │  └────────────┘ └──────────────┘ └────────────────┘  │   │  │
+│  │  └──────────────────────────────────────────────────────┘   │  │
+│  └────────────────────────┬────────────────────────────────────┘  │
+│                           │                                        │
+│                           ▼                                        │
+│   ┌─────────────────────────────────────────┐                      │
+│   │ Google Gemini API                       │                      │
+│   │ (generativelanguage.googleapis.com)     │                      │
+│   │  • gemini-2.0-flash (default)           │                      │
+│   │  • gemini-2.0-flash-thinking (smart)    │                      │
+│   │  • gemini-2.5-pro (best)                │                      │
+│   └─────────────────────────────────────────┘                      │
+│                                                                    │
+│   ~/Library/Application Support/com.cluelyhidden.app/              │
+│    ├── secure_storage.json    (Gemini API key, settings)           │
+│    ├── conversations.db       (SQLite: msgs, facts)                 │
+│    ├── captures/              (PNGs, WAVs — opt-in)                │
+│    └── prompts/               (user-edited prompt templates)       │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
----
+## 5. The Hotkey System (7 Actions)
 
-## 4. Data Model (SQLite)
+| Action ID | Default Hotkey | What it does |
+|---|---|---|
+| `toggle_overlay` | `⌘+Shift+Space` | Show/hide the main overlay |
+| `open_settings` | `⌘+Shift+,` | Open settings window |
+| `screenshot` | `⌘+Shift+S` | Capture screen + send to AI |
+| `audio_toggle` | `⌘+Shift+A` | Start/stop voice recording |
+| `audio_system` | `⌘+Shift+M` | Toggle system audio capture (v0.4) |
+| `focus_input` | `⌘+Shift+I` | Bring overlay forward, focus the input |
+| `move_window` | `⌘+arrows` | Hold ⌘ and press arrows to reposition |
+
+The action_id dispatch pattern (from Pluely) is the way: every registered shortcut has an action_id, the handler dispatches by action_id, the frontend can also subscribe to action events for custom UI.
+
+## 6. The 7 System Prompts (Ported from Pluely)
+
+1. **real_time_translator** — "Listen and translate"
+2. **meeting_assistant** — "Listen, summarize, action items"
+3. **interview_assistant** — "Answer interview Q's with my resume + JD context"
+4. **technical_interview** — "Coding/system design hints"
+5. **presentation_coach** — "Delivery, talking points, confidence"
+6. **learning_companion** — "Explain concepts, suggest questions"
+7. **customer_service** — "Quick responses, solutions, talking points"
+
+Each prompt is editable in the UI. Stored in SQLite.
+
+## 7. Stealth Checklist (P0)
+
+| Requirement | How |
+|---|---|
+| Invisible in screen-share | `.content_protected(true)` on overlay window |
+| Hidden from Dock | `.skip_taskbar(true)` + `app.set_activation_policy(Accessory)` |
+| Hidden from Cmd+Tab | Same as above — accessory apps don't appear |
+| Not in macOS screenshots | `content_protected(true)` covers this |
+| Not in screen recordings | `content_protected(true)` covers this |
+| Process hidden in Activity Monitor | ❌ Not possible (Mac shows all processes). We make the WINDOW invisible, not the process. |
+| No log entries revealing the app | All paths under `~/Library/Application Support/com.cluelyhidden.app/` |
+| Tray icon only presence | `.icon_as_template(true)` for menu bar adaption |
+
+## 8. IPC Contract
+
+```typescript
+// Window
+toggle_overlay(): void
+open_settings(): void
+move_window(direction: "up"|"down"|"left"|"right", step: number): void
+set_click_through(enabled: boolean): void
+
+// Capture
+capture_screen(): { id, path, width, height }
+start_audio_capture(): void
+stop_audio_capture(): { id, path, duration_ms, transcript? }
+
+// AI (Gemini)
+chat_stream(input: ChatInput): AsyncIterable<ChatChunk>  // SSE
+list_models(): ModelInfo[]
+get_active_prompt(): SystemPrompt
+set_active_prompt(id: string): void
+
+// Prompts
+list_prompts(): SystemPrompt[]
+create_prompt(input: PromptInput): SystemPrompt
+update_prompt(id: string, patch: PromptInput): SystemPrompt
+delete_prompt(id: string): void
+
+// Conversations
+list_conversations(): Conversation[]
+create_conversation(): Conversation
+list_messages(conversationId: string): Message[]
+save_message(message: Message): void
+delete_conversation(id: string): void
+
+// Settings
+get_settings(): AppSettings
+update_settings(patch: Partial<AppSettings>): AppSettings
+set_api_key(key: string): void         // stored in secure_storage.json
+has_api_key(): boolean
+validate_api_key(): { valid: boolean, error?: string }
+
+// Events (Rust → JS)
+"overlay:visibility" → boolean
+"audio:level" → number               // 0.0-1.0 for waveform UI
+"audio:transcript" → string          // partial STT
+"shortcut:triggered" → { action: string }
+"capture:complete" → { id, path }
+```
+
+## 9. Data Model (SQLite)
 
 ```sql
 -- Conversations
 CREATE TABLE conversations (
   id TEXT PRIMARY KEY,
   title TEXT,
+  prompt_id TEXT REFERENCES prompts(id),
   created_at INTEGER,
-  updated_at INTEGER,
-  context_window INTEGER DEFAULT 10
+  updated_at INTEGER
 );
 
 -- Messages
@@ -102,198 +198,87 @@ CREATE TABLE messages (
   content TEXT,
   created_at INTEGER,
   tokens_used INTEGER,
-  source TEXT  -- 'hotkey', 'text', 'voice', 'screen'
+  model TEXT,
+  attachments TEXT  -- JSON array of file refs
 );
 
--- Memory facts (the "grows on your data" part)
-CREATE TABLE memory_facts (
+-- User prompts (the 7 templates + custom)
+CREATE TABLE prompts (
   id TEXT PRIMARY KEY,
-  fact TEXT,
-  category TEXT,           -- 'preference', 'fact', 'pattern', 'project'
-  confidence REAL,         -- 0.0-1.0
-  embedding BLOB,          -- 384-dim float vector
-  first_seen INTEGER,
-  last_reinforced INTEGER,
-  reinforce_count INTEGER DEFAULT 1
+  name TEXT,
+  prompt TEXT,
+  is_template INTEGER DEFAULT 0,  -- 1 = built-in, 0 = user-created
+  created_at INTEGER,
+  updated_at INTEGER
 );
 
--- Vector search via sqlite-vss
-CREATE VIRTUAL TABLE memory_fts USING vss0(
-  embedding(384)
-);
-
--- Captures (screen/audio) — stored only if user opts in
+-- Captures (opt-in)
 CREATE TABLE captures (
   id TEXT PRIMARY KEY,
   kind TEXT CHECK(kind IN ('screen', 'audio')),
   file_path TEXT,
+  width INTEGER,
+  height INTEGER,
   duration_ms INTEGER,
   created_at INTEGER,
-  processed INTEGER DEFAULT 0  -- 1 = text extracted, embedding made
+  conversation_id TEXT REFERENCES conversations(id)
+);
+
+-- Settings (in addition to secure_storage.json)
+-- Stored as key-value for flexibility
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT  -- JSON
 );
 ```
 
----
+## 10. Phased Delivery (Revised)
 
-## 5. Module Breakdown (Rust Core)
+| Phase | Focus | Deliverable |
+|---|---|---|
+| **0** ✅ | Scaffold + working hello-world | Done (commit 2728b44) |
+| **0b** ✅ | Stealth + working .app | Done (commit afd1633) |
+| **1** | **P0: Maximum stealth** | `content_protected`, Accessory policy, hidden from Cmd+Tab, no Dock icon, click-through |
+| **2** | **P0: Multi-hotkey system** | 7 hotkeys with action_id dispatch, rebindable from settings |
+| **3** | **P0: Real Gemini integration** | Streaming chat, API key in secure storage, model picker, 7 prompt templates |
+| **4** | **P0: Chat UI polish** | Markdown rendering, code blocks, streaming animation, message history |
+| **5** | **P0: Settings UI** | Hotkey rebinding, model picker, prompt editor, capture toggles, API key input |
+| **6** | **P0: Screen capture** | `⌘+Shift+S` captures screen → auto-attaches to next message |
+| **7** | **P1: Audio capture + STT** | Push-to-talk, waveform, VAD, Gemini transcribes audio |
+| **8** | **P0: System audio capture** | Captures meeting audio (ScreenCaptureKit) |
+| **9** | **P0: Conversation persistence** | SQLite, history sidebar, search |
+| **10** | **P1: Memory + fact extraction** | Gemini extracts user facts from conversations, surfaces them in responses |
+| **11** | **P0: Final ship** | Signed .dmg, notarized, polished |
 
-```
-src-tauri/src/
-├── main.rs                  # entry, builds tauri::Builder
-├── lib.rs                   # re-exports
-├── config.rs                # paths, env, feature flags
-├── error.rs                 # AppError type, Result alias
-│
-├── window/
-│   ├── mod.rs
-│   ├── overlay.rs           # creates + manages overlay window
-│   ├── settings.rs          # settings window
-│   └── helpers.rs           # show/hide, focus, position
-│
-├── input/
-│   ├── mod.rs
-│   ├── hotkey.rs            # global shortcut registration
-│   └── tray.rs              # NSStatusItem menu
-│
-├── capture/
-│   ├── mod.rs
-│   ├── screen.rs            # ScreenCaptureKit wrapper
-│   └── audio.rs             # cpal microphone capture
-│
-├── ai/
-│   ├── mod.rs
-│   ├── router.rs            # decides local vs cloud, model selection
-│   ├── ollama.rs            # Ollama HTTP client
-│   ├── openai_compat.rs     # optional cloud fallback
-│   ├── embeddings.rs        # fastembed wrapper
-│   └── prompts.rs           # system prompts, templates
-│
-├── memory/
-│   ├── mod.rs
-│   ├── store.rs             # SQLite CRUD
-│   ├── facts.rs             # fact extraction + reinforcement
-│   └── search.rs            # vector + FTS search
-│
-├── ipc/
-│   ├── mod.rs
-│   └── commands.rs          # #[tauri::command] handlers
-│
-└── util/
-    ├── mod.rs
-    ├── paths.rs             # ~/Library/Application Support/cluely-hidden
-    └── tokens.rs            # token counting (tiktoken-rs)
-```
-
----
-
-## 6. Frontend Structure (React)
-
-```
-src/
-├── main.tsx                 # entry
-├── App.tsx                  # router
-├── routes/
-│   ├── Overlay.tsx          # main stealth overlay UI
-│   ├── Settings.tsx         # settings panel
-│   └── Onboarding.tsx       # first-run wizard
-│
-├── components/
-│   ├── ui/                  # shadcn primitives
-│   ├── ChatStream.tsx       # streaming message display
-│   ├── InputBar.tsx         # text + voice input
-│   ├── CapturePreview.tsx   # shows last screen/audio capture
-│   └── MemoryInspector.tsx  # dev tool: see what AI knows about you
-│
-├── lib/
-│   ├── tauri.ts             # typed IPC wrappers (invoke, listen)
-│   ├── store.ts             # zustand stores
-│   └── utils.ts
-│
-└── styles/
-    └── globals.css          # tailwind + custom
-```
-
----
-
-## 7. IPC Contract (TypeScript ↔ Rust)
-
-```typescript
-// src/lib/tauri.ts
-export interface CluelyAPI {
-  // Window control
-  toggleOverlay(): Promise<void>;
-  hideOverlay(): Promise<void>;
-  setClickThrough(enabled: boolean): Promise<void>;
-
-  // Capture
-  captureScreen(): Promise<{ id: string; path: string; width: number; height: number }>;
-  startAudioCapture(): Promise<void>;
-  stopAudioCapture(): Promise<{ id: string; transcript: string }>;
-
-  // AI
-  chat(conversationId: string, message: string, context?: CaptureContext): Promise<AsyncIterable<ChatChunk>>;
-  searchMemory(query: string, limit?: number): Promise<MemoryFact[]>;
-
-  // Memory
-  listMemoryFacts(category?: string): Promise<MemoryFact[]>;
-  deleteMemoryFact(id: string): Promise<void>;
-  reinforceMemoryFact(id: string): Promise<void>;
-
-  // Settings
-  getSettings(): Promise<Settings>;
-  updateSettings(patch: Partial<Settings>): Promise<Settings>;
-}
-```
-
----
-
-## 8. Performance Budget
+## 11. Performance Budget
 
 | Metric | Target |
 |---|---|
-| App cold start (warm cache) | < 500ms |
-| Overlay show latency (hotkey → visible) | < 100ms |
-| Idle RAM (overlay hidden) | < 50MB |
-| Idle RAM (overlay visible) | < 120MB |
-| Binary size (uncompressed) | < 15MB |
-| Binary size (DMG) | < 25MB |
-| First-token latency (local 3B model) | < 800ms |
-| Streaming tokens/sec (M2 Pro) | > 30 tok/s |
+| App cold start (cached) | < 500ms |
+| Hotkey → overlay visible | < 100ms |
+| Overlay first paint (Vite) | < 300ms |
+| Idle RAM (overlay hidden) | < 40MB |
+| Idle RAM (overlay visible) | < 100MB |
+| First Gemini token (gemini-2.0-flash) | < 800ms |
+| Streaming tokens/sec | > 50 |
+| Screen capture + encode | < 200ms |
+| Audio capture latency | < 50ms |
 
----
+## 12. Security & Privacy
 
-## 9. Security & Privacy
+- **API key in `~/Library/Application Support/com.cluelyhidden.app/secure_storage.json`** — never logged, never sent anywhere except Gemini
+- **No telemetry, no analytics**
+- **Screen captures stored locally** — never uploaded unless user explicitly shares in chat
+- **Audio recordings stored locally** — same rule
+- **All conversations in local SQLite** — never synced
+- **macOS sandbox:** Not sandboxed (we need global hotkeys + screen capture). Notarized for distribution.
+- **Permissions requested:** Accessibility (hotkeys), Screen Recording (capture), Microphone (audio)
 
-- **No network calls by default** — all AI inference is local (Ollama) unless user explicitly enables cloud provider with their own key.
-- **No global keystroke logging** — we only capture input when overlay is open AND the input field is focused.
-- **Screen capture is explicit** — one-time macOS TCC permission, then per-capture consent via the overlay UI.
-- **Audio capture is opt-in** — toggled in settings, never on by default.
-- **All data stays in `~/Library/Application Support/cluely-hidden/`** — no telemetry, no analytics, no auto-update pings.
-- **Memory facts are user-visible and user-deletable** — `MemoryInspector` UI shows everything the AI has learned.
+## 13. Why Gemini
 
----
-
-## 10. Phased Delivery
-
-| Phase | Deliverable | What works |
-|---|---|---|
-| **1** | Project skeleton + working `.dmg` | Empty app launches, has tray icon, can be installed/uninstalled |
-| **2** | Stealth overlay | ⌘+Shift+Space shows/hides transparent always-on-top window |
-| **3** | Tray menu + settings | Right-click tray for menu; settings window for hotkey, theme, model |
-| **4** | Screen + audio capture | ⌘+Shift+S captures screen, ⌘+Shift+A starts audio, text extracted |
-| **5** | Chat UI | Send messages, see responses (stubbed for now), conversation history |
-| **6** | Settings + storage | SQLite persistence, settings panel, onboarding flow |
-| **7** | Hermes/Ollama brain | Real AI responses, memory fact extraction, vector search |
-| **8** | Ship | Signed, notarized, polished `.dmg` ready to install |
-
-Each phase ends with a working `.dmg` you can install and use.
-
----
-
-## 11. Open Questions / Future
-
-- iOS companion? (Tauri Mobile is alpha, skip for v1)
-- Multi-monitor awareness for overlay positioning
-- Plugin system for user-built "skills" (Hermes-style)
-- Onboarding data import (Notion, Obsidian, etc.)
-- Cloud sync of memory across user's devices (E2E encrypted)
+- **Multimodal native** — text + images + audio in one call (perfect for screenshots + voice)
+- **Fast (gemini-2.0-flash)** — 50+ tok/s
+- **Smart (gemini-2.5-pro)** — when you need it
+- **Free tier is generous** — 15 RPM, 1M TPM, 1500 RPD
+- **API key from AI Studio** — `aistudio.google.com/apikey` — one click, free
+- **No vendor lock-in for prompts** — same prompts work with OpenAI/Claude if user adds their key later

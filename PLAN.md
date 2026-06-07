@@ -1,599 +1,529 @@
-# Cluely-Hidden — Implementation Plan
+# Cluely-Hidden — Build Plan v0.2.0 (P0 Stealth + Gemini)
 
-> **For Hermes:** Use subagent-driven-development skill to execute this plan task-by-task.
-> Each task = 2-5 min of focused work. TDD where it makes sense. Commit after every task.
-
-**Goal:** Ship a working, signed, notarized `.dmg` of a stealth AI assistant overlay for macOS.
-
-**Architecture:** Tauri 2 (Rust core) + React 18 + TypeScript. Local-first. Modular. Each phase ends with a working `.dmg`.
-
-**Tech Stack:** Tauri 2.1+, Rust 1.96, React 18, TypeScript 5, Vite 5, Tailwind 3, shadcn/ui, Zustand, SQLite (rusqlite), Ollama (HTTP).
+> Each phase = 1 subagent dispatch with 2-stage review.
+> Sequential phases (P1 must finish before P2 starts) — but inside a phase, tasks can run in parallel.
 
 ---
 
-## Phase 0: Project Scaffolding & Tooling
+## ✅ Phase 0: Scaffold + Hello-World
+- Status: DONE
+- Commit: `2728b44`
+- App launches, tray icon works, ⌘+Shift+Space toggles overlay, stub chat echoes
 
-### Task 0.1: Initialize Tauri 2 project
-
-**Files:** `~/Code/cluely-hidden/*` (entire project tree)
-
-**Step 1:** Use `create-tauri-app` non-interactively to scaffold the project in place.
-
-```bash
-cd ~/Code/cluely-hidden
-npm create tauri-app@latest . -- --template react-ts --manager npm --identifier com.cluelyhidden.app --yes
-```
-
-**Step 2:** Verify scaffold:
-```bash
-ls -la
-cat package.json
-cat src-tauri/tauri.conf.json | head -30
-```
-
-**Step 3:** Add PATH for cargo to your shell profile permanently (if not already):
-```bash
-grep -q 'cargo/env' ~/.zshrc || echo '\n# Rust\nsource "$HOME/.cargo/env"' >> ~/.zshrc
-```
-
-**Step 4:** Commit:
-```bash
-cd ~/Code/cluely-hidden
-git add -A
-git commit -m "chore: scaffold tauri 2 + react-ts project"
-```
-
-**Verification:** `package.json` and `src-tauri/Cargo.toml` exist, `npm run tauri --version` succeeds.
+## ✅ Phase 0b: Stealth compilation fix
+- Status: DONE
+- Commit: `afd1633`
+- `image-png` feature enabled, removed unused imports, build succeeds
 
 ---
 
-### Task 0.2: Configure project metadata & capabilities
+## 🚧 Phase 1: P0 — Maximum Stealth
 
-**Files:** `src-tauri/tauri.conf.json`, `src-tauri/capabilities/default.json`
+**Goal:** The window is invisible in Zoom/Meet/Teams/Discord screen-share, hidden from Dock, hidden from Cmd+Tab, and not in macOS screenshots. No one knows it's running.
 
-**Step 1:** Update `src-tauri/tauri.conf.json`:
-- `productName`: "Cluely Hidden"
-- `version`: "0.1.0"
-- `identifier`: "com.cluelyhidden.app"
-- `bundle.macOS.minimumSystemVersion`: "12.0"
-- Add `bundle.macOS.entitlements` and `bundle.macOS.exceptionDomain` (empty for now)
+**Why now:** Everything else is meaningless if the app is visible. Stealth is the foundation.
 
-**Step 2:** Update `src-tauri/capabilities/default.json` to grant permissions we'll need:
-- `core:default`
-- `core:window:allow-show`
-- `core:window:allow-hide`
-- `core:window:allow-set-focus`
-- `core:window:allow-set-always-on-top`
-- `core:window:allow-set-ignore-cursor-events`
-- `core:webview:allow-internal-toggle-devtools`
-- `core:event:default`
+**Files to modify:**
+- `src-tauri/Cargo.toml` — no change (features already right)
+- `src-tauri/tauri.conf.json` — remove `visible: false` from main window? No, keep hidden by default. Add `titleBarStyle: "Overlay"`.
+- `src-tauri/src/lib.rs` — set `ActivationPolicy::Accessory` in setup hook
+- `src-tauri/src/window/overlay.rs` — add `content_protected(true)`, `hidden_title(true)`, `title_bar_style(Overlay)`
 
-**Step 3:** Commit:
-```bash
-git add -A && git commit -m "chore: configure tauri metadata + capabilities"
-```
+**Subagent tasks (sequential — they touch the same file):**
 
----
+### Task 1.1: Add `content_protected(true)` to overlay window
+- File: `src-tauri/src/window/overlay.rs`
+- Add `.content_protected(true)` to the WebviewWindowBuilder chain
+- Verify: build, launch, take a screenshot (Cmd+Shift+3), confirm no overlay window in the screenshot
+- Test in Zoom/Meet/Discord screen-share if possible
 
-### Task 0.3: Add Tailwind CSS + shadcn/ui setup
+### Task 1.2: Set ActivationPolicy to Accessory
+- File: `src-tauri/src/lib.rs`
+- In `setup`, after creating the overlay, call:
+  ```rust
+  app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+  ```
+  Wait — `app` is `&mut App`, and the API is `app.set_activation_policy(...)` directly on `App` (not `AppHandle`).
+- Verify: launch, check Cmd+Tab (Cluely Hidden should NOT be in the app switcher), check Dock (no icon)
 
-**Files:** `package.json`, `tailwind.config.js`, `postcss.config.js`, `src/index.css`
+### Task 1.3: Add `title_bar_style(Overlay)` + `hidden_title(true)` to overlay
+- File: `src-tauri/src/window/overlay.rs`
+- These are macOS-only — use `#[cfg(target_os = "macos")]`
+- Verify: build, launch, the overlay window should have a sleek overlay-style title bar (for drag area) when shown
 
-**Step 1:** Install Tailwind + shadcn deps:
-```bash
-cd ~/Code/cluely-hidden
-npm install -D tailwindcss@3 postcss autoprefixer
-npm install class-variance-authority clsx tailwind-merge lucide-react
-npx tailwindcss init -p
-```
+**Acceptance criteria:**
+- [ ] App is not in macOS Dock
+- [ ] App is not in Cmd+Tab app switcher
+- [ ] Overlay window does NOT appear in macOS screenshot (Cmd+Shift+3)
+- [ ] Overlay window does NOT appear in Zoom/Meet/Teams/Discord screen-share
+- [ ] Tray icon IS visible in menu bar
+- [ ] ⌘+Shift+Space still summons overlay
+- [ ] Overlay can be clicked, dragged, dismissed
 
-**Step 2:** Configure `tailwind.config.js` with content paths and dark mode.
-
-**Step 3:** Replace `src/index.css` with Tailwind directives + dark mode defaults.
-
-**Step 4:** Create `src/lib/utils.ts` with the standard `cn()` helper.
-
-**Step 5:** Verify build: `npm run build`
-
-**Step 6:** Commit:
-```bash
-git add -A && git commit -m "chore: add tailwind + shadcn base setup"
-```
+**Subagent for this phase: `rust-stealth-window-lead`**
 
 ---
 
-### Task 0.4: Add Zustand + base IPC types
+## 🚧 Phase 2: P0 — Multi-Hotkey System (7 Actions)
 
-**Files:** `package.json`, `src/lib/tauri.ts`, `src/lib/store.ts`
+**Goal:** Replace the single `⌘+Shift+Space` with 7 action-based hotkeys. Settings will let users rebind them.
 
-**Step 1:** Install Zustand:
-```bash
-npm install zustand
-```
+**Files to modify:**
+- `src-tauri/src/hotkeys/mod.rs` (new) — action_id-based dispatch
+- `src-tauri/src/hotkeys/actions.rs` (new) — the 7 action handlers
+- `src-tauri/src/hotkeys/registry.rs` (new) — register/unregister/rebind
+- `src-tauri/src/lib.rs` — wire up the new hotkey system
+- `src-tauri/src/state.rs` (new) — `HotkeyState` with the bindings map
+- `src/lib/tauri.ts` — typed wrappers for the 7 actions
+- `src/lib/store.ts` — zustand slice for hotkey bindings
+- `src/routes/Settings.tsx` — add Hotkeys section
 
-**Step 2:** Create `src/lib/tauri.ts` — typed IPC wrappers (skeleton, commands added per phase):
-```typescript
-import { invoke } from '@tauri-apps/api/core';
-// typed wrappers added as we implement commands
-```
+**Subagent tasks:**
 
-**Step 3:** Create `src/lib/store.ts` — base Zustand store for overlay state (visible, click-through, current conversation).
+### Task 2.1: Define the 7 action_ids + defaults
+- File: `src-tauri/src/hotkeys/actions.rs`
+- Enum `HotkeyAction` with 7 variants
+- Each has a default key combo per platform
+- Each maps to a function `(&AppHandle) -> Result<()>`
 
-**Step 4:** Commit:
-```bash
-git add -A && git commit -m "chore: add zustand + ipc skeleton"
-```
+### Task 2.2: Build the registry
+- File: `src-tauri/src/hotkeys/registry.rs`
+- `HotkeyRegistry` stores `HashMap<HotkeyAction, Shortcut>`
+- `register_all(app)` registers all 7
+- `unregister_all(app)` for rebind flow
+- `rebind(app, action, new_shortcut)` swaps one
+- Each shortcut has a handler that dispatches to the action function
 
----
+### Task 2.3: Wire it into lib.rs
+- File: `src-tauri/src/lib.rs`
+- In setup: call `registry.register_all(&app.handle())`
+- Expose `rebind_hotkey` and `get_hotkey_bindings` as `#[tauri::command]`
 
-### Task 0.5: Verify cold-start build (hello-world .dmg)
+### Task 2.4: TypeScript side
+- File: `src/lib/tauri.ts`
+- Add wrappers: `getHotkeyBindings()`, `rebindHotkey(action, key)`, `onShortcutTriggered(cb)`
+- File: `src/lib/store.ts`
+- Add `hotkeyBindings` slice
 
-**Files:** (none modified)
-
-**Step 1:** Run dev mode to verify it launches:
-```bash
-cd ~/Code/cluely-hidden
-npm run tauri dev
-# Wait for window to appear, then quit (Cmd+Q)
-```
-
-**Step 2:** Run release build to produce a real `.app` and `.dmg`:
-```bash
-npm run tauri build
-# Output: src-tauri/target/release/bundle/macos/Cluely Hidden.app
-#         src-tauri/target/release/bundle/dmg/Cluely Hidden_0.1.0_<arch>.dmg
-```
-
-**Step 3:** Test the `.dmg`:
-- Open the `.dmg`
-- Drag app to `/Applications`
-- Launch from Finder
-- Verify window appears with default Vite + React content
-- Quit
-
-**Step 4:** Tag this commit as the first `.dmg` milestone:
-```bash
-git tag v0.1.0-phase0
-```
-
-**Verification:** Working `.dmg` exists, installs, launches, shows window. This is our baseline.
+**Acceptance criteria:**
+- [ ] All 7 hotkeys fire and dispatch the right action
+- [ ] Frontend can read current bindings via `getHotkeyBindings()`
+- [ ] Frontend can rebind via `rebindHotkey('toggle_overlay', 'Cmd+Shift+D')` and it works immediately
+- [ ] Settings UI shows current bindings and lets user rebind each
 
 ---
 
-## Phase 1: Stealth Overlay Window
+## 🚧 Phase 3: P0 — Real Gemini Integration
 
-### Task 1.1: Add Rust dependencies for window management
+**Goal:** Replace the stub `chat` command with a real streaming call to Google Gemini. API key in secure storage. 3 models (flash, flash-thinking, pro). 7 prompt templates.
 
-**Files:** `src-tauri/Cargo.toml`
+**Files:**
+- `src-tauri/src/ai/mod.rs` (new) — module root
+- `src-tauri/src/ai/gemini.rs` (new) — Gemini API client (reqwest + SSE)
+- `src-tauri/src/ai/router.rs` (new) — model picker, prompt selection
+- `src-tauri/src/ai/prompts.rs` (new) — the 7 prompt templates
+- `src-tauri/src/storage.rs` (new) — secure_storage.json read/write
+- `src-tauri/src/db/mod.rs` (new) — rusqlite connection + migrations
+- `src-tauri/src/db/prompts.rs` (new) — prompt CRUD
+- `src-tauri/src/db/conversations.rs` (new) — conversation CRUD
+- `src-tauri/src/ipc/commands.rs` — replace stub `chat` with real one
+- `src-tauri/Cargo.toml` — add reqwest, rusqlite, tokio, futures
+- `src/lib/tauri.ts` — typed streaming chat
+- `src/components/ChatStream.tsx` — handle streaming chunks
+- `src/components/InputBar.tsx` — call chat_stream
+- `src/routes/Settings.tsx` — add API key + model picker + prompt selector
+- `src/lib/prompts.ts` (new) — the 7 prompt constants
 
-**Step 1:** Add deps:
-```toml
-[dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
-tauri-plugin-global-shortcut = "2"
-tauri-plugin-tray = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "1"
-anyhow = "1"
-```
+**Subagent tasks (parallel where possible):**
 
-**Step 2:** `cd src-tauri && cargo check` — verify it builds.
+### Task 3.1: Secure storage for API key
+- File: `src-tauri/src/storage.rs`
+- `set_api_key(key)`, `get_api_key() -> Option<String>`, `has_api_key() -> bool`
+- Stored in `~/Library/Application Support/com.cluelyhidden.app/secure_storage.json`
+- File mode 0600 (owner read/write only)
+- Add `set_api_key`, `has_api_key` commands
 
-**Step 3:** Commit.
+### Task 3.2: SQLite + migrations
+- File: `src-tauri/src/db/mod.rs`
+- Opens/creates `conversations.db`
+- Runs migrations: conversations, messages, prompts, captures, settings tables
+- All schema from ARCHITECTURE §9
 
----
+### Task 3.3: Gemini API client
+- File: `src-tauri/src/ai/gemini.rs`
+- `GeminiClient::stream_chat(messages, model) -> impl Stream<Item=Result<String>>`
+- Uses Gemini's OpenAI-compatible endpoint OR native API (you pick based on what's simpler)
+- Streams tokens back via Tauri events: `chat:chunk` events
 
-### Task 1.2: Create Rust window module
+### Task 3.4: The 7 prompt templates
+- File: `src-tauri/src/ai/prompts.rs` + `src/lib/prompts.ts`
+- Port all 7 from Pluely's `lib/platform-instructions.ts`
+- On first launch, seed the DB with these as `is_template=1`
 
-**Files:** `src-tauri/src/window/mod.rs`, `src-tauri/src/window/overlay.rs`, `src-tauri/src/window/helpers.rs`, `src-tauri/src/lib.rs`
+### Task 3.5: Wire the chat command
+- File: `src-tauri/src/ipc/commands.rs`
+- Replace stub `chat` with real `chat_stream`
+- Accepts `{ conversation_id, message, attachments, model?, prompt_id? }`
+- Loads conversation history from DB
+- Loads the active prompt
+- Calls Gemini
+- Streams chunks via Tauri events
+- Saves user + assistant messages to DB
 
-**Step 1:** Create `src-tauri/src/window/mod.rs`:
-```rust
-pub mod overlay;
-pub mod helpers;
-```
+### Task 3.6: Frontend chat UI
+- File: `src/components/ChatStream.tsx`
+- Listen for `chat:chunk` events, append to last assistant message
+- Show typing indicator while waiting
+- Render markdown (use `react-markdown`)
+- File: `src/components/InputBar.tsx`
+- Call `chat_stream`, handle streaming
+- Show stop button while streaming
 
-**Step 2:** Create `src-tauri/src/window/overlay.rs` — function `create_overlay_window(app: &tauri::AppHandle) -> Result<()>`. Sets:
-- `decorations: false`
-- `transparent: true`
-- `always_on_top: true`
-- `skip_taskbar: true`
-- `resizable: false`
-- Position: bottom-right of primary monitor, 420×600
-- `visible: false` (starts hidden)
-- `focus: false`
+### Task 3.7: Settings — API key input
+- File: `src/routes/Settings.tsx`
+- Password input for API key (mask with dots)
+- "Test" button: validates the key with a tiny Gemini call
+- "Save" button: stores in secure storage
+- "Where do I get a key?" link to `aistudio.google.com/apikey`
 
-**Step 3:** Create `src-tauri/src/window/helpers.rs` with `show_overlay`, `hide_overlay`, `toggle_overlay`, `set_click_through`.
+### Task 3.8: Settings — Model picker + Prompt selector
+- File: `src/routes/Settings.tsx`
+- Model dropdown: gemini-2.0-flash, gemini-2.0-flash-thinking, gemini-2.5-pro
+- Prompt dropdown: the 7 templates, plus "Custom" for user-edited
+- Selection stored in `settings` table
 
-**Step 4:** Wire into `lib.rs`:
-```rust
-mod window;
+**Acceptance criteria:**
+- [ ] User can paste Gemini API key, save it, validate it
+- [ ] User can pick a model
+- [ ] User can pick a prompt template
+- [ ] Sending a message in overlay returns a real streamed response from Gemini
+- [ ] Conversation is saved to SQLite and restored on next launch
+- [ ] All 7 prompt templates are available and selectable
+- [ ] Markdown is rendered (code blocks, bold, italic, lists)
+- [ ] Streaming animation feels smooth
 
-pub fn run() {
-    tauri::Builder::default()
-        .setup(|app| {
-            window::overlay::create_overlay_window(app.handle())?;
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            window::helpers::toggle_overlay,
-            window::helpers::show_overlay,
-            window::helpers::hide_overlay,
-            window::helpers::set_click_through,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
-```
-
-**Step 5:** Add `#[tauri::command]` annotations to the helper functions with typed args/returns.
-
-**Step 6:** Verify build: `cd src-tauri && cargo check`
-
-**Step 7:** Commit.
-
----
-
-### Task 1.3: Configure overlay window in tauri.conf.json
-
-**Files:** `src-tauri/tauri.conf.json`
-
-**Step 1:** Add a second window config to `tauri.conf.json`:
-```json
-"windows": [
-  {
-    "label": "main",
-    "title": "Cluely Hidden",
-    "width": 420,
-    "height": 600,
-    "decorations": false,
-    "transparent": true,
-    "alwaysOnTop": true,
-    "skipTaskbar": true,
-    "resizable": false,
-    "visible": false
-  }
-]
-```
-
-**Step 2:** Verify: `npm run tauri dev` — main window should be hidden initially (we'll trigger via IPC next).
-
-**Step 3:** Commit.
+**Subagent for this phase: `ai-integration-lead` (Rust) + `chat-ui-lead` (React), parallel**
 
 ---
 
-### Task 1.4: Build overlay UI shell (React)
+## 🚧 Phase 4: P0 — Chat UI Polish
 
-**Files:** `src/App.tsx`, `src/components/OverlayShell.tsx`, `src/routes/Overlay.tsx`, `src/styles/overlay.css`
+**Goal:** The chat panel feels like Linear or Notion AI. Sleek, fast, beautiful.
 
-**Step 1:** Create `OverlayShell.tsx` — rounded panel, backdrop-blur, drag handle, close button, click-through toggle button. Use Tailwind.
+**Files:**
+- `src/components/Message.tsx` (new) — single message bubble with markdown
+- `src/components/ChatStream.tsx` — refactor to use Message
+- `src/components/CodeBlock.tsx` (new) — syntax-highlighted code blocks
+- `src/components/TypingDots.tsx` (new) — animated typing indicator
+- `src/lib/markdown.ts` (new) — markdown config (sanitize, plugins)
 
-**Step 2:** Update `App.tsx` to render the overlay shell.
+**Subagent tasks:**
 
-**Step 3:** Add dev-only "show overlay" button at the bottom of the screen (only visible when `import.meta.env.DEV`).
+### Task 4.1: Message component
+- File: `src/components/Message.tsx`
+- Props: `{ role, content, streaming }`
+- User messages: right-aligned, primary color bubble
+- Assistant: left-aligned, muted color bubble
+- Markdown via `react-markdown` with `remark-gfm`
+- Code blocks via `CodeBlock`
 
-**Step 4:** Verify in `npm run tauri dev` — overlay looks like a sleek floating panel.
+### Task 4.2: Code block
+- File: `src/components/CodeBlock.tsx`
+- Use `shiki` or `prism-react-renderer` for syntax highlighting
+- Copy button on hover
+- Language label
 
-**Step 5:** Commit.
+### Task 4.3: Typing animation
+- File: `src/components/TypingDots.tsx`
+- Three dots that fade in/out with stagger
+- Used while waiting for first chunk
+- After first chunk: stop showing, show the message with a `streaming` cursor
 
----
-
-### Task 1.5: Test overlay show/hide via dev console
-
-**Files:** (none — manual test)
-
-**Step 1:** Run `npm run tauri dev`.
-
-**Step 2:** Open devtools (right-click → Inspect), run in console:
-```js
-window.__TAURI__.core.invoke('show_overlay')
-// verify overlay appears
-window.__TAURI__.core.invoke('hide_overlay')
-// verify overlay disappears
-```
-
-**Step 3:** Commit any tweaks. Phase 1 done when overlay correctly shows/hides via IPC.
-
----
-
-## Phase 2: Global Hotkey & Tray
-
-### Task 2.1: Add global shortcut plugin
-
-**Files:** `src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`, `src-tauri/tauri.conf.json`
-
-**Step 1:** Register `tauri-plugin-global-shortcut` in `lib.rs`:
-```rust
-use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
-
-.plugin(
-    tauri_plugin_global_shortcut::Builder::new()
-        .with_shortcuts(["CmdOrCtrl+Shift+Space"])?
-        .with_handler(|app, shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                let _ = window::helpers::toggle_overlay(app);
-            }
-        })
-        .build(),
-)
-```
-
-**Step 2:** Verify: `npm run tauri dev`, press ⌘+Shift+Space — overlay toggles.
-
-**Step 3:** Commit.
+**Acceptance criteria:**
+- [ ] User and assistant messages visually distinct
+- [ ] Markdown renders correctly (headings, lists, code, bold, italic)
+- [ ] Code blocks have syntax highlighting + copy button
+- [ ] Typing indicator shows while waiting for first chunk
+- [ ] Streaming cursor shows at end of partial response
+- [ ] No layout shift as content streams in
 
 ---
 
-### Task 2.2: Add tray icon with menu
+## 🚧 Phase 5: P0 — Settings UI
 
-**Files:** `src-tauri/src/window/tray.rs`, `src-tauri/src/window/mod.rs`, `src-tauri/src/lib.rs`
+**Goal:** The settings window is complete and pleasant. Every setting the user might want to change is here.
 
-**Step 1:** Create `tray.rs` with menu items: "Show/Hide Overlay", "Settings…", "Quit".
+**Files:**
+- `src/routes/Settings.tsx` — already exists, refactor heavily
+- `src/components/SettingRow.tsx` (new)
+- `src/components/SettingSection.tsx` (new)
+- `src/components/KeyRecorder.tsx` (new) — for rebinding hotkeys
+- `src/components/ModelPicker.tsx` (new)
+- `src/components/PromptPicker.tsx` (new)
+- `src/components/PromptEditor.tsx` (new) — edit a prompt template
 
-**Step 2:** Register tray in `lib.rs` setup hook using `tauri::tray::TrayIconBuilder`.
+**Subagent tasks:**
 
-**Step 3:** Add a tray icon asset: `src-tauri/icons/tray-icon.png` (16×16, template style).
+### Task 5.1: Settings layout
+- File: `src/routes/Settings.tsx`
+- Sections: General, Hotkeys, AI, Capture, Privacy, About
+- Sticky nav on left, content on right
+- Dark mode by default
 
-**Step 4:** Verify: tray icon appears in menu bar, menu items work, quit exits cleanly.
+### Task 5.2: Hotkey recorder
+- File: `src/components/KeyRecorder.tsx`
+- Click to start recording, then capture the next key combo
+- "Reset to default" button
+- Conflict detection (warn if binding is already used by another action)
 
-**Step 5:** Commit.
+### Task 5.3: Prompt editor
+- File: `src/components/PromptEditor.tsx`
+- Edit any of the 7 templates (or create custom)
+- Live preview of the prompt
+- "Restore default" button for templates
 
----
-
-### Task 2.3: Add permissions for global-shortcut & tray
-
-**Files:** `src-tauri/capabilities/default.json`
-
-**Step 1:** Add:
-```json
-{
-  "identifier": "global-shortcut:default",
-  "allow": [{ "identifier": "global-shortcut:default" }]
-}
-```
-
-**Step 2:** Verify capabilities load — `npm run tauri dev` shouldn't error on startup.
-
-**Step 3:** Commit. Phase 2 done when ⌘+Shift+Space toggles overlay AND tray menu works.
-
----
-
-## Phase 3: Settings Window
-
-### Task 3.1: Add settings window
-
-**Files:** `src-tauri/tauri.conf.json`, `src/routes/Settings.tsx`, `src-tauri/src/window/helpers.rs`
-
-**Step 1:** Add second window in `tauri.conf.json`:
-```json
-{
-  "label": "settings",
-  "title": "Cluely Hidden — Settings",
-  "width": 600,
-  "height": 500,
-  "url": "settings.html"
-}
-```
-
-**Step 2:** Create `src/settings.html` and `src/routes/Settings.tsx` — basic settings form (hotkey, theme toggle, about).
-
-**Step 3:** Add `open_settings` command in `helpers.rs`.
-
-**Step 4:** Wire tray "Settings…" menu item to `open_settings`.
-
-**Step 5:** Verify: tray → Settings opens the window, can be closed via X.
-
-**Step 6:** Commit.
+**Acceptance criteria:**
+- [ ] All settings persist (hotkey bindings, model, prompt, API key flag, capture toggles)
+- [ ] Settings open via tray menu and via `⌘+Shift+,`
+- [ ] Hotkey recorder works for all 7 actions
+- [ ] Conflicts are detected and shown
+- [ ] Prompt editor saves changes immediately
 
 ---
 
-## Phase 4: Screen & Audio Capture
+## 🚧 Phase 6: P0 — Screen Capture
 
-### Task 4.1: Screen capture via ScreenCaptureKit
+**Goal:** `⌘+Shift+S` captures the current screen, attaches it to the next chat message, and the user can ask "what's wrong with this code?" or "summarize this article".
 
-**Files:** `src-tauri/src/capture/mod.rs`, `src-tauri/src/capture/screen.rs`, `src-tauri/Cargo.toml`
+**Files:**
+- `src-tauri/src/capture/mod.rs` (new) — module root
+- `src-tauri/src/capture/screen.rs` (new) — xcap-based screen capture
+- `src-tauri/src/capture/store.rs` (new) — save to captures/, insert DB row
+- `src-tauri/Cargo.toml` — add `xcap = "0.0.x"`
+- `src-tauri/src/ipc/commands.rs` — add `capture_screen` command
+- `src/lib/tauri.ts` — wrapper
+- `src/components/CapturePreview.tsx` (new) — shows last capture as a thumbnail in overlay
+- `src/components/InputBar.tsx` — camera button sends capture to Gemini
 
-**Step 1:** Add deps:
-```toml
-[dependencies]
-screencapturekit = "0.3"
-image = "0.25"
-```
+**Subagent tasks:**
 
-**Step 2:** Implement `capture_screen(app, mode: "window" | "display")` — uses ScreenCaptureKit, saves PNG to `app_data_dir/captures/`, returns path + dimensions.
+### Task 6.1: Screen capture backend
+- File: `src-tauri/src/capture/screen.rs`
+- Uses `xcap::Monitor::all().capture_image()` to grab the primary monitor
+- Returns `RgbaImage`, encode to PNG
+- Save to `~/Library/Application Support/com.cluelyhidden.app/captures/{uuid}.png`
+- Insert into `captures` table
 
-**Step 3:** Handle macOS TCC permission prompt on first capture.
+### Task 6.2: Attach to message
+- File: `src-tauri/src/ai/gemini.rs`
+- `GeminiClient::send_with_image(text, image_path)`
+- Sends text + base64-encoded image to Gemini in one call
+- Gemini Vision handles the rest
 
-**Step 4:** Add `capture_screen` command.
+### Task 6.3: Frontend capture flow
+- File: `src/components/CapturePreview.tsx`
+- Shows the last capture as a small thumbnail at the top of the chat
+- "X" to detach
+- File: `src/components/InputBar.tsx`
+- Camera button (⌘+Shift+S) captures and attaches
+- Auto-sends the next message with image
 
-**Step 5:** Verify in `npm run tauri dev` + invoke from console: produces a PNG file.
-
-**Step 6:** Commit.
-
----
-
-### Task 4.2: Audio capture (microphone)
-
-**Files:** `src-tauri/src/capture/audio.rs`, `src-tauri/Cargo.toml`
-
-**Step 1:** Add deps:
-```toml
-[dependencies]
-cpal = "0.15"
-hound = "3.5"
-```
-
-**Step 2:** Implement `start_audio_capture` and `stop_audio_capture` — record to WAV file using cpal + hound.
-
-**Step 3:** Add commands.
-
-**Step 4:** Verify: record 5 seconds, produces a valid WAV file.
-
-**Step 5:** Commit. Phase 4 done when both screen + audio capture produce real files.
-
----
-
-## Phase 5: Chat UI
-
-### Task 5.1: Build chat components
-
-**Files:** `src/components/ChatStream.tsx`, `src/components/InputBar.tsx`, `src/components/Message.tsx`
-
-**Step 1:** `Message.tsx` — bubble with role-based styling (user right-aligned, assistant left).
-
-**Step 2:** `ChatStream.tsx` — virtualized list of messages, auto-scroll to bottom, typing indicator.
-
-**Step 3:** `InputBar.tsx` — text input + send button + mic button + capture button.
-
-**Step 4:** Wire into `Overlay.tsx` replacing the placeholder.
-
-**Step 5:** Verify: type a message, see it appear in the stream.
-
-**Step 6:** Commit.
+**Acceptance criteria:**
+- [ ] `⌘+Shift+S` captures the primary screen in < 500ms
+- [ ] Capture thumbnail shows in overlay
+- [ ] Sending a message with capture attached returns a Gemini Vision response
+- [ ] User can detach the capture before sending
+- [ ] Captures are stored locally, never uploaded automatically
 
 ---
 
-### Task 5.2: Stub chat command in Rust
+## 🚧 Phase 7: P1 — Audio Capture + STT
 
-**Files:** `src-tauri/src/ai/mod.rs`, `src-tauri/src/ai/router.rs`, `src-tauri/src/lib.rs`
+**Goal:** Push-to-talk voice input. Gemini transcribes audio + responds in one call (multimodal).
 
-**Step 1:** Create `ai/mod.rs` and `ai/router.rs` with a stub `chat` command that echoes the input.
+**Files:**
+- `src-tauri/src/capture/audio.rs` (new) — cpal-based mic capture
+- `src-tauri/Cargo.toml` — add `cpal`, `hound`
+- `src/components/AudioBar.tsx` (new) — recording UI with waveform
 
-**Step 2:** Register command.
+**Subagent tasks:**
 
-**Step 3:** Wire `InputBar` to call `chat` command, render response in stream.
+### Task 7.1: Mic capture backend
+- File: `src-tauri/src/capture/audio.rs`
+- `start_recording()` opens mic stream
+- `stop_recording()` returns WAV bytes
+- Uses cpal for capture, hound for WAV encoding
+- Optional VAD for auto-stop (port VAD config from Pluely)
 
-**Step 4:** Verify: send a message, see the echo back.
+### Task 7.2: Gemini audio input
+- File: `src-tauri/src/ai/gemini.rs`
+- `GeminiClient::send_with_audio(text, audio_path)` — sends text + audio inline
+- Gemini's `gemini-2.0-flash` handles audio natively
 
-**Step 5:** Commit.
+### Task 7.3: Frontend audio UI
+- File: `src/components/AudioBar.tsx`
+- Push-to-talk button (hold to record)
+- Waveform visualization during recording
+- "Transcribing..." spinner after release
+- Auto-sends the transcription + audio to Gemini
 
----
-
-## Phase 6: SQLite Persistence
-
-### Task 6.1: Add SQLite + migrations
-
-**Files:** `src-tauri/src/memory/mod.rs`, `src-tauri/src/memory/store.rs`, `src-tauri/Cargo.toml`
-
-**Step 1:** Add deps:
-```toml
-[dependencies]
-rusqlite = { version = "0.31", features = ["bundled"] }
-uuid = { version = "1", features = ["v4", "serde"] }
-```
-
-**Step 2:** Implement `MemoryStore::new(path) -> Result<Self>` — opens DB, runs migrations.
-
-**Step 3:** Schema migrations create the tables from ARCHITECTURE.md §4.
-
-**Step 4:** Add commands: `list_conversations`, `create_conversation`, `save_message`, `list_messages`.
-
-**Step 5:** Verify: invoke commands from devtools, rows appear in DB.
-
-**Step 6:** Commit.
+**Acceptance criteria:**
+- [ ] Hold mic button, speak, release → message sent
+- [ ] Waveform animates in real-time
+- [ ] Gemini transcribes and responds in < 2s
+- [ ] VAD auto-stops if user stops talking for 1s
+- [ ] Audio stored locally in captures/
 
 ---
 
-### Task 6.2: Wire chat to persistence
+## 🚧 Phase 8: P0 — System Audio Capture (Meetings)
 
-**Files:** `src/components/InputBar.tsx`, `src/lib/store.ts`
+**Goal:** `⌘+Shift+M` captures meeting audio (Zoom, Meet, etc.) and feeds it to the AI in real-time.
 
-**Step 1:** On message send: create conversation if none, save user message, call `chat`, save assistant response.
+**Files:**
+- `src-tauri/src/capture/system_audio.rs` (new) — ScreenCaptureKit on macOS
+- `src-tauri/Cargo.toml` — add `screencapturekit = "0.3"` or use `cpal` with system device
 
-**Step 2:** On overlay open: load last conversation's messages.
+**Subagent tasks:**
 
-**Step 3:** Verify: send 3 messages, quit, relaunch, see history.
+### Task 8.1: System audio capture
+- File: `src-tauri/src/capture/system_audio.rs`
+- On macOS, use `screencapturekit` to capture system audio
+- Stream chunks to the AI continuously
+- Show a "listening..." indicator in the overlay
 
-**Step 4:** Commit. Phase 6 done.
+### Task 8.2: Real-time AI
+- File: `src-tauri/src/ai/gemini.rs`
+- `GeminiClient::stream_audio_chunks(stream) -> Stream<response>`
+- Gemini's Live API supports real-time audio (v0.5 — for now just buffer and send periodically)
 
----
-
-## Phase 7: AI Brain (Ollama)
-
-### Task 7.1: Ollama client
-
-**Files:** `src-tauri/src/ai/ollama.rs`
-
-**Step 1:** Implement `OllamaClient::chat(messages, model) -> Stream<String>` using `reqwest` + Server-Sent Events.
-
-**Step 2:** Add `chat` command that streams chunks back to the frontend via Tauri events.
-
-**Step 3:** Verify: install Ollama, run `ollama pull llama3.2:3b`, send a message in overlay, see streamed response.
-
-**Step 4:** Commit.
-
----
-
-### Task 7.2: Memory fact extraction
-
-**Files:** `src-tauri/src/memory/facts.rs`, `src-tauri/src/ai/router.rs`
-
-**Step 1:** After each conversation, run a small LLM call to extract facts ("User prefers dark mode").
-
-**Step 2:** Store facts with embeddings (stub: empty embedding for now, real embeddings in v0.3).
-
-**Step 3:** Add `list_memory_facts` command + `MemoryInspector` UI route.
-
-**Step 4:** Verify: have 2 conversations, see facts appear in inspector.
-
-**Step 5:** Commit. Phase 7 done.
+**Acceptance criteria:**
+- [ ] `⌘+Shift+M` starts system audio capture
+- [ ] Overlay shows a "listening" indicator
+- [ ] Gemini processes the audio and provides insights
+- [ ] Capture stops cleanly when toggled off
 
 ---
 
-## Phase 8: Final Packaging & Ship
+## 🚧 Phase 9: P0 — Conversation Persistence
 
-### Task 8.1: Configure code signing & notarization
+**Goal:** Conversations are searchable, organized, and persist across launches.
 
-**Files:** `src-tauri/tauri.conf.json`, environment
+**Files:**
+- `src-tauri/src/db/conversations.rs` (new)
+- `src-tauri/src/db/messages.rs` (new)
+- `src/components/HistorySidebar.tsx` (new)
+- `src/components/ConversationList.tsx` (new)
 
-**Step 1:** Add Apple Developer ID to env (`APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`).
+**Subagent tasks:**
 
-**Step 2:** Configure `tauri.conf.json` `bundle.macOS.signingIdentity`.
+### Task 9.1: DB CRUD
+- Files: `src-tauri/src/db/{conversations,messages}.rs`
+- `list_conversations`, `create_conversation`, `delete_conversation`
+- `list_messages(conv_id)`, `save_message(msg)`
 
-**Step 3:** Run `npm run tauri build` — verify signed + notarized.
+### Task 9.2: History sidebar
+- File: `src/components/HistorySidebar.tsx`
+- List of conversations (title = first user message or generated title)
+- Click to load
+- Delete with confirmation
+- Search bar
 
-**Step 4:** Verify: `codesign -dvv` on the `.app`, `spctl --assess` on the `.dmg`.
-
-**Step 5:** Commit.
+**Acceptance criteria:**
+- [ ] Conversations are saved automatically
+- [ ] Reloading the app shows previous conversations
+- [ ] User can search conversations
+- [ ] User can delete conversations
+- [ ] User can rename conversations
 
 ---
 
-### Task 8.2: Polish + smoke test
+## 🚧 Phase 10: P1 — Memory + Fact Extraction
 
-**Files:** various
+**Goal:** After each conversation, Gemini extracts user facts ("User prefers dark mode", "User is interviewing at Google"). These surface in the system prompt of future conversations.
 
-**Step 1:** Add an onboarding window that opens on first launch.
+**Files:**
+- `src-tauri/src/memory/mod.rs` (new) — memory module
+- `src-tauri/src/memory/facts.rs` (new) — fact extraction + storage
+- `src-tauri/src/db/memory.rs` (new) — memory_facts table
+- `src/lib/MemoryInspector.tsx` (new) — dev tool: see all known facts
 
-**Step 2:** Add an app icon set (replace default Tauri icons).
+**Subagent tasks:**
 
-**Step 3:** Update README with install + usage instructions.
+### Task 10.1: Memory store
+- File: `src-tauri/src/memory/facts.rs`
+- `extract_facts(conversation_messages) -> Vec<Fact>` — calls Gemini to extract
+- `store_facts(facts)`, `list_facts()`, `delete_fact(id)`
 
-**Step 4:** Final manual smoke test on a clean install.
+### Task 10.2: Inject into system prompt
+- File: `src-tauri/src/ai/router.rs`
+- Before sending to Gemini, prepend the user's known facts to the system prompt
+- Use Gemini's `cachedContent` API for efficient reuse
 
-**Step 5:** Tag `v0.1.0`, push.
+### Task 10.3: Memory inspector
+- File: `src/routes/MemoryInspector.tsx`
+- Shows all known facts
+- User can edit/delete any
+- "This is what the AI knows about you" page
+
+**Acceptance criteria:**
+- [ ] After 5+ conversations, the AI starts referencing known facts
+- [ ] User can see, edit, and delete facts
+- [ ] "Forget everything" button clears all memory
 
 ---
 
-## Execution Notes
+## 🚧 Phase 11: P0 — Final Ship
 
-- **Test as you go.** Don't accumulate 10 untested tasks. Verify each one in `npm run tauri dev` or `cargo test` before moving on.
-- **Commit after every task.** Even small ones. The history is your rollback.
-- **When stuck > 5 min, ask.** Don't burn context on debugging rabbit holes.
-- **Parallelize where safe.** Tasks that don't share files can be dispatched together via `delegate_task(tasks=[...])`.
-- **Sequential for foundations.** Scaffolding, config, main.rs — these must be done in order.
+**Goal:** Signed, notarized `.dmg` ready to distribute.
 
-## Estimated Effort (per phase)
+**Subagent tasks:**
 
-| Phase | Tasks | Subagent-min | Real-time (parallel) |
-|---|---|---|---|
-| 0 — Scaffolding | 5 | 25 | ~10 min |
-| 1 — Overlay | 5 | 30 | ~15 min |
-| 2 — Hotkey + Tray | 3 | 20 | ~10 min |
-| 3 — Settings | 1 | 15 | ~10 min |
-| 4 — Capture | 2 | 40 | ~25 min (compile times) |
-| 5 — Chat UI | 2 | 25 | ~15 min |
-| 6 — Persistence | 2 | 25 | ~15 min |
-| 7 — AI Brain | 2 | 35 | ~20 min (Ollama setup) |
-| 8 — Ship | 2 | 30 | ~20 min |
-| **Total** | **24** | **~245 subagent-min** | **~2.5 hours wall clock** |
+### Task 11.1: App icon set
+- Generate proper 16/32/128/256/512/1024 PNGs + .icns
+- App icon should be slick (not the placeholder C)
+
+### Task 11.2: Code signing
+- Configure `tauri.conf.json` with `bundle.macOS.signingIdentity`
+- Set `APPLE_ID`, `APPLE_PASSWORD` (app-specific), `APPLE_TEAM_ID` env vars
+
+### Task 11.3: Notarization
+- `tauri build` with notarization enabled
+- Verify with `spctl --assess`
+
+### Task 11.4: Final QA
+- Clean install on a fresh Mac
+- All hotkeys work
+- All features work
+- No console errors
+- All prompts selectable
+- All settings persist
+- Code-signed .dmg installs without "unidentified developer" warning
+
+**Acceptance criteria:**
+- [ ] `.dmg` opens
+- [ ] Drag-to-Applications works
+- [ ] App launches without warnings
+- [ ] All features work end-to-end
+- [ ] Code-signed + notarized
+- [ ] Total binary size < 30MB
+
+---
+
+## Estimated Subagent Count
+
+| Phase | Tasks | Estimated subagent-min |
+|---|---|---|
+| 1 | 3 | 30 |
+| 2 | 4 | 40 |
+| 3 | 8 | 80 (parallel) |
+| 4 | 3 | 25 |
+| 5 | 3 | 30 |
+| 6 | 3 | 35 |
+| 7 | 3 | 35 |
+| 8 | 2 | 30 |
+| 9 | 2 | 25 |
+| 10 | 3 | 35 |
+| 11 | 4 | 40 |
+| **Total** | **38** | **~405 subagent-min** |
+| **Real time (parallel where possible)** | | **~3-4 hours wall clock** |
