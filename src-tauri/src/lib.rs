@@ -13,6 +13,7 @@ mod hotkeys;
 use tauri::Manager;
 
 use crate::hotkeys::registry::HotkeyState;
+use crate::window::overlay;
 use crate::window::tray;
 use crate::settings::SettingsState;
 
