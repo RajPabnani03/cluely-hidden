@@ -30,6 +30,30 @@ impl Default for AppSettings {
     }
 }
 
+/// Partial-update payload from the frontend. All fields optional so the
+/// UI can send just the changed ones.
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct SettingsPatch {
+    pub hotkey: Option<String>,
+    pub theme: Option<String>,
+    pub model: Option<String>,
+    pub capture_enabled: Option<bool>,
+    pub audio_enabled: Option<bool>,
+    pub launch_at_login: Option<bool>,
+}
+
+impl SettingsPatch {
+    pub fn apply_to(self, mut s: AppSettings) -> AppSettings {
+        if let Some(v) = self.hotkey { s.hotkey = v; }
+        if let Some(v) = self.theme { s.theme = v; }
+        if let Some(v) = self.model { s.model = v; }
+        if let Some(v) = self.capture_enabled { s.capture_enabled = v; }
+        if let Some(v) = self.audio_enabled { s.audio_enabled = v; }
+        if let Some(v) = self.launch_at_login { s.launch_at_login = v; }
+        s
+    }
+}
+
 /// Tauri-managed state holding the live settings. Updated on every
 /// `update_settings` call and written to disk via the store plugin.
 #[derive(Default)]
@@ -42,13 +66,13 @@ impl SettingsState {
         self.inner.lock().expect("settings mutex poisoned").clone()
     }
 
-    pub fn update(&self, patch: AppSettings) -> Result<AppSettings> {
+    pub fn update(&self, patch: SettingsPatch) -> Result<AppSettings> {
         let mut guard = self.inner.lock().expect("settings mutex poisoned");
-        *guard = patch;
-        let snapshot = guard.clone();
+        let merged = patch.apply_to(guard.clone());
+        *guard = merged.clone();
         drop(guard);
-        // In Phase 3 we'll persist via tauri-plugin-store here.
+        // In Phase 6 we'll persist via rusqlite here.
         // For v0.1, in-memory only.
-        Ok(snapshot)
+        Ok(merged)
     }
 }

@@ -5,7 +5,7 @@
 use tauri::AppHandle;
 
 use crate::error::Result;
-use crate::settings::{AppSettings, SettingsState};
+use crate::settings::{AppSettings, SettingsPatch, SettingsState};
 use crate::window::helpers;
 use crate::window::overlay;
 
@@ -51,7 +51,7 @@ pub fn get_settings(state: tauri::State<'_, SettingsState>) -> Result<AppSetting
 #[tauri::command]
 pub fn update_settings(
     state: tauri::State<'_, SettingsState>,
-    patch: AppSettings,
+    patch: SettingsPatch,
 ) -> Result<AppSettings> {
     state.update(patch)
 }
