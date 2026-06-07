@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import type { ChatMessage } from "./tauri";
+import {
+  type ChatMessage,
+  type HotkeyBindings,
+  type HotkeyActionId,
+  getHotkeyBindings,
+} from "./tauri";
 
 interface OverlayState {
   visible: boolean;
@@ -7,6 +12,7 @@ interface OverlayState {
   streaming: boolean;
   currentConversationId: string | null;
   messages: ChatMessage[];
+  hotkeyBindings: HotkeyBindings;
 
   setVisible: (v: boolean) => void;
   toggleVisible: () => void;
@@ -16,6 +22,9 @@ interface OverlayState {
   appendMessage: (msg: ChatMessage) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;
+  setHotkeyBindings: (b: HotkeyBindings) => void;
+  loadHotkeyBindings: () => Promise<void>;
+  resetSensitiveState: () => void;
 }
 
 export const useOverlayStore = create<OverlayState>((set) => ({
@@ -24,6 +33,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   streaming: false,
   currentConversationId: null,
   messages: [],
+  hotkeyBindings: [] as HotkeyBindings,
 
   setVisible: (v) => set({ visible: v }),
   toggleVisible: () => set((s) => ({ visible: !s.visible })),
@@ -43,4 +53,22 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       return { messages: next };
     }),
   clearMessages: () => set({ messages: [] }),
+  setHotkeyBindings: (b) => set({ hotkeyBindings: b }),
+  loadHotkeyBindings: async () => {
+    try {
+      const b = await getHotkeyBindings();
+      set({ hotkeyBindings: b });
+    } catch (err) {
+      console.error("loadHotkeyBindings failed:", err);
+    }
+  },
+  resetSensitiveState: () =>
+    set({
+      messages: [],
+      currentConversationId: null,
+      streaming: false,
+      clickThrough: false,
+    }),
 }));
+
+export type { HotkeyActionId };

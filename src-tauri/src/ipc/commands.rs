@@ -6,8 +6,9 @@ use tauri::AppHandle;
 
 use crate::error::Result;
 use crate::settings::{AppSettings, SettingsPatch, SettingsState};
+use crate::hotkeys::actions;
+use crate::hotkeys::registry::HotkeyState;
 use crate::window::helpers;
-
 // ---------- Window ----------
 
 #[tauri::command]
@@ -53,6 +54,29 @@ pub fn update_settings(
     patch: SettingsPatch,
 ) -> Result<AppSettings> {
     state.update(patch)
+}
+
+// ---------- Hotkeys ----------
+
+/// Return all current hotkey bindings as `(action_id, key)` pairs.
+#[tauri::command]
+pub fn get_hotkey_bindings(state: tauri::State<'_, HotkeyState>) -> Result<Vec<(String, String)>> {
+    let registry = state.0.lock().expect("hotkey mutex poisoned");
+    Ok(registry.current_bindings())
+}
+
+/// Rebind a single action to a new key combo.
+#[tauri::command]
+pub fn rebind_hotkey(
+    state: tauri::State<'_, HotkeyState>,
+    app: tauri::AppHandle,
+    action: String,
+    new_key: String,
+) -> Result<()> {
+    let action_enum = actions::from_action_id(&action)
+        .ok_or_else(|| crate::error::AppError::Other(format!("unknown action: {action}")))?;
+    let mut registry = state.0.lock().expect("hotkey mutex poisoned");
+    registry.rebind(&app, action_enum, new_key)
 }
 
 // ---------- Chat (stub for v0.1; real streaming in v0.2) ----------

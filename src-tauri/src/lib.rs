@@ -8,9 +8,11 @@ mod error;
 mod window;
 mod ipc;
 mod settings;
+mod hotkeys;
 
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 
+use crate::hotkeys::registry::HotkeyState;
 use crate::window::helpers;
 use crate::window::overlay;
 use crate::window::tray;
@@ -29,17 +31,11 @@ pub fn run() {
         // ---------- Plugins ----------
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        if let Err(e) = helpers::toggle(app) {
-                            log::error!("toggle_overlay failed: {e:#}");
-                        }
-                    }
-                })
                 .build(),
         )
         // ---------- State ----------
         .manage(SettingsState::default())
+        .manage(HotkeyState::default())
         // ---------- Setup ----------
         .setup(|app| {
             // ---------- Phase 1 — P0 Stealth ----------
@@ -69,15 +65,13 @@ pub fn run() {
             // Create the tray icon (the only visible UI presence).
             tray::create(app.handle())?;
 
-            // Register the global hotkey: ⌘+Shift+Space
-            let shortcut = Shortcut::new(
-                Some(Modifiers::SUPER | Modifiers::SHIFT),
-                Code::Space,
-            );
-            if let Err(e) = app.global_shortcut().register(shortcut) {
-                log::error!("failed to register global shortcut: {e:#}");
-            } else {
-                log::info!("global hotkey registered: ⌘+Shift+Space");
+            // Register all 11 hotkeys via the registry
+            {
+                let state = app.state::<HotkeyState>();
+                let registry = state.0.lock().expect("hotkey mutex poisoned");
+                if let Err(e) = registry.register_all(app.handle()) {
+                    log::error!("failed to register hotkeys: {e:#}");
+                }
             }
 
             log::info!("setup complete");
@@ -94,6 +88,8 @@ pub fn run() {
             ipc::commands::get_settings,
             ipc::commands::update_settings,
             ipc::commands::chat,
+            ipc::commands::get_hotkey_bindings,
+            ipc::commands::rebind_hotkey,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

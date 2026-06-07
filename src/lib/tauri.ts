@@ -68,6 +68,45 @@ export async function chat(input: {
   return invoke("chat", { input });
 }
 
+// ---------- Hotkeys ----------
+export type HotkeyActionId =
+  | "toggle_visibility"
+  | "next_step"
+  | "emergency_erase"
+  | "toggle_click_through"
+  | "move_up"
+  | "move_down"
+  | "move_left"
+  | "move_right"
+  | "previous_response"
+  | "next_response"
+  | "scroll_up"
+  | "scroll_down";
+
+export type HotkeyBinding = [HotkeyActionId, string];
+export type HotkeyBindings = HotkeyBinding[];
+
+export async function getHotkeyBindings(): Promise<HotkeyBindings> {
+  return invoke("get_hotkey_bindings");
+}
+
+export async function rebindHotkey(
+  action: HotkeyActionId,
+  newKey: string,
+): Promise<void> {
+  return invoke("rebind_hotkey", { action, newKey });
+}
+
+export async function onShortcutTriggered(
+  cb: (action: HotkeyActionId) => void,
+): Promise<UnlistenFn> {
+  return listen<string>("shortcut:triggered", (e) => cb(e.payload as HotkeyActionId));
+}
+
+export async function onClearSensitiveData(cb: () => void): Promise<UnlistenFn> {
+  return listen("clear-sensitive-data", () => cb());
+}
+
 // ---------- Event subscriptions ----------
 export function onOverlayVisibilityChange(
   cb: (visible: boolean) => void,

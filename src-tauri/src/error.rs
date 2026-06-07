@@ -7,6 +7,9 @@ pub enum AppError {
     #[error("tauri error: {0}")]
     Tauri(#[from] tauri::Error),
 
+    #[error("global shortcut error: {0}")]
+    GlobalShortcut(String),
+
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -21,6 +24,13 @@ pub enum AppError {
 
     #[error("{0}")]
     Other(String),
+}
+
+// Bridge tauri-plugin-global-shortcut errors to our AppError
+impl From<tauri_plugin_global_shortcut::Error> for AppError {
+    fn from(e: tauri_plugin_global_shortcut::Error) -> Self {
+        AppError::GlobalShortcut(e.to_string())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;

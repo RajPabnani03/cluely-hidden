@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import {
   onOverlayVisibilityChange,
+  onClearSensitiveData,
   toggleOverlay as tauriToggleOverlay,
 } from "./lib/tauri";
 import { useOverlayStore } from "./lib/store";
@@ -10,6 +11,8 @@ import { DevPanel } from "./components/DevPanel";
 export default function App() {
   const visible = useOverlayStore((s) => s.visible);
   const setVisible = useOverlayStore((s) => s.setVisible);
+  const loadHotkeyBindings = useOverlayStore((s) => s.loadHotkeyBindings);
+  const resetSensitiveState = useOverlayStore((s) => s.resetSensitiveState);
 
   // Listen for visibility events from Rust (hotkey / tray)
   useEffect(() => {
@@ -21,6 +24,25 @@ export default function App() {
       unlisten?.();
     };
   }, [setVisible]);
+
+  // Listen for emergency erase — wipe in-memory state
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    onClearSensitiveData(() => {
+      console.warn("emergency erase: clearing sensitive frontend state");
+      resetSensitiveState();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [resetSensitiveState]);
+
+  // Load hotkey bindings on mount
+  useEffect(() => {
+    loadHotkeyBindings();
+  }, [loadHotkeyBindings]);
 
   // Dev-only escape hatch: dev panel in the corner of the main window
   if (import.meta.env.DEV) {
