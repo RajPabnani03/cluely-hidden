@@ -1,218 +1,193 @@
-# Cluely-Hidden — Architecture v0.2.0
+# Cluely-Hidden — Architecture v0.3.0
 
-> **Mission:** A lightweight, **stealth** AI assistant overlay for macOS. Completely invisible in screen-share, screen recordings, screenshots, and the Dock. Summoned by hotkey, dismissed by hotkey. Powered by Google Gemini. Inspired by Pluely.
+> **Mission:** A lightweight, **stealth** AI assistant for macOS. Invisible in screen-share, invisible in the Dock, summoned by hotkey. Real-time audio (Gemini Live), screenshot-driven workflow, emergency erase. Inspired by cheating-daddy (5.3k⭐) and Pluely.
 >
-> **Stack:** Tauri 2.11 + React 18 + TypeScript + Tailwind + Zustand + SQLite (rusqlite) + Gemini API
+> **Stack:** Tauri 2.11 + React 18 + TypeScript + Tailwind + Zustand + SQLite + Google Gemini Live + Ollama (local fallback)
 >
-> **Tagline:** "Slick. To the point. Undetectable."
+> **Tagline:** "Slick. Real-time. Undetectable. Yours."
 
 ---
 
-## 1. The Three Non-Negotiables (P0)
+## 1. The Five Non-Negotiables (P0)
 
-1. **🔒 Invisible in screen-share** — Zoom, Meet, Teams, Discord, QuickTime, macOS screenshot. Uses `content_protected(true)` on macOS.
-2. **👻 Hidden from Dock + Cmd+Tab** — `skip_taskbar(true)`, no `LSUIElement: false`. Tray icon is the only presence.
-3. **⚡ Hotkey-only** — `⌘+Shift+Space` shows, same again hides. No window in app switcher when hidden.
+1. **🔒 Invisible in screen-share** — `content_protected(true)` → Zoom/Meet/Teams/Discord/screenshots/recordings
+2. **👻 Hidden from Dock + Cmd+Tab** — Accessory policy + `setHiddenInMissionControl(true)`
+3. **⚡ Real-time** — Gemini Live WebSocket for sub-300ms response time
+4. **🆘 Emergency erase** — One hotkey (⌘+Shift+E) hides window, closes AI session, wipes local data, quits
+5. **⌨️ Screenshot-driven UX** — ⌘+Enter takes screenshot, AI responds, user reads answer
 
-## 2. What We Steal From Pluely
+## 2. Sources of Inspiration
 
-| Feature | Pluely impl | Our impl |
-|---|---|---|
-| `content_protected(true)` | ✅ in `window.rs:create_dashboard_window` | ✅ port verbatim |
-| Multi-hotkey dispatch | ✅ in `shortcuts.rs:handle_shortcut_action` | ✅ port action_id pattern |
-| 7 system prompts | ✅ in `lib/platform-instructions.ts` | ✅ port all 7 verbatim |
-| AI provider plugin (curl templates) | ✅ in `config/ai-providers.constants.ts` | ✅ port + add Gemini explicitly |
-| VAD-based push-to-talk | ✅ in `hooks/useSystemAudio.ts` | ✅ port VAD config |
-| Screen capture overlay | ✅ in `capture.rs` (xcap) | ✅ port xcap usage |
-| Tauri-nspanel for macOS | ✅ | ❌ skip — too heavy, we use WebviewWindow |
-| License/activation system | ✅ | ❌ skip — we're open source, no payment |
+| App | Stars | Stack | What we steal |
+|---|---|---|---|
+| **cheating-daddy** (sohzm) | 5.3k | Electron + Lit | Gemini Live, 11 hotkeys, 6 profiles, emergency erase, screenshot-driven UX, VAD, 2-model arch (Live listen → fast respond) |
+| **pluely** (iamsrikanthnani) | 2k | Tauri + React | The stealth Tauri 2 API calls (`content_protected`, `title_bar_style(Overlay)`, `hidden_title`), 7 prompt templates pattern, xcap |
+| **cluely.com** | — | — | The original positioning (stealth interview assistant) |
 
 ## 3. Tech Stack (Locked)
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Shell | Tauri 2.11 (Rust) | macos-private-api, tray-icon, image-png features |
-| UI | React 18 + TypeScript + Vite | Same as Pluely |
-| Styling | Tailwind 3 + shadcn-style tokens | Dark-mode first |
-| State | Zustand 5 | Tiny, no boilerplate |
-| DB | SQLite via rusqlite (bundled) | Conversations, prompts, captures |
-| AI | **Google Gemini API** (gemini-2.0-flash default) | Via OpenAI-compat endpoint OR native |
-| HTTP | reqwest (Rust) | For Gemini streaming |
-| Capture | xcap (Rust) | Cross-platform screen capture |
-| Hotkeys | tauri-plugin-global-shortcut | Native |
-| Tray | tauri::tray (core) | No separate plugin |
-| Streaming | Server-Sent Events from Gemini | Or just chunked HTTP |
+| Shell | Tauri 2.11 (Rust) | `macos-private-api`, `tray-icon`, `image-png` features |
+| UI | React 18 + TypeScript + Vite | shadcn/ui, dark-mode first |
+| State | Zustand 5 | Per-view slices |
+| DB | SQLite (rusqlite, bundled) | Conversations, settings, profiles |
+| AI (primary) | **Google Gemini Live** (`@google/genai` v1.2) | Real-time audio, sub-300ms |
+| AI (respond) | **Google Gemini Flash** OR Groq OR Ollama (local) | Pluggable |
+| HTTP | reqwest + rust-native-tungstenite (WS for Live) | |
+| Audio | `cpal` (Rust) + `hound` (WAV) | Mic capture |
+| System audio (macOS) | `screencapturekit` (Rust) | Port from cheating-daddy's `SystemAudioDump` approach |
+| Screen | `xcap` (Rust) | Port from Pluely |
+| Hotkeys | `tauri-plugin-global-shortcut` | 11 actions |
+| Tray | `tauri::tray` (core) | |
+| Markdown | `react-markdown` + `remark-gfm` + `shiki` | Same as Pluely pattern |
+| Storage (secrets) | `~/Library/Application Support/com.cluelyhidden.app/secure_storage.json` | 0600 perms |
+| VAD | Port Pluely's RMS-based VAD with 4 modes | |
+| Resampling | Port cheating-daddy's 24k→16k linear interpolation | |
 
-## 4. System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  macOS Desktop                                                      │
-│                                                                     │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  cluely-hidden.app  (Tauri 2 / Rust core)                     │  │
-│  │                                                               │  │
-│  │  ┌──────────────┐  ┌────────────────┐  ┌──────────────────┐  │  │
-│  │  │ Tray Icon    │  │ Overlay Window │  │ Settings Window  │  │  │
-│  │  │ (NSStatus)   │  │ (Webview)      │  │ (Webview)        │  │  │
-│  │  │              │  │ content-       │  │ (when opened)    │  │  │
-│  │  │              │  │ protected=true │  │                  │  │  │
-│  │  └──────┬───────┘  └────────┬───────┘  └────────┬─────────┘  │  │
-│  │         │                   │ Tauri IPC (typed) │            │  │
-│  │         └───────────────────┼───────────────────┘            │  │
-│  │                             ▼                                │  │
-│  │  ┌──────────────────────────────────────────────────────┐   │  │
-│  │  │  Rust Core                                            │   │  │
-│  │  │  ┌────────────┐ ┌──────────────┐ ┌────────────────┐  │   │  │
-│  │  │  │ Hotkey Mgr │ │ Window Mgr   │ │ Capture Mgr    │  │   │  │
-│  │  │  │ (7 actions)│ │ (show/hide)  │ │ (xcap + audio) │  │   │  │
-│  │  │  └────────────┘ └──────────────┘ └────────────────┘  │   │  │
-│  │  │  ┌────────────┐ ┌──────────────┐ ┌────────────────┐  │   │  │
-│  │  │  │ AI Router  │ │ Memory Store │ │ Prompt Engine  │  │   │  │
-│  │  │  │ (Gemini)   │ │ (SQLite)     │ │ (7 templates)  │  │   │  │
-│  │  │  └────────────┘ └──────────────┘ └────────────────┘  │   │  │
-│  │  └──────────────────────────────────────────────────────┘   │  │
-│  └────────────────────────┬────────────────────────────────────┘  │
-│                           │                                        │
-│                           ▼                                        │
-│   ┌─────────────────────────────────────────┐                      │
-│   │ Google Gemini API                       │                      │
-│   │ (generativelanguage.googleapis.com)     │                      │
-│   │  • gemini-2.0-flash (default)           │                      │
-│   │  • gemini-2.0-flash-thinking (smart)    │                      │
-│   │  • gemini-2.5-pro (best)                │                      │
-│   └─────────────────────────────────────────┘                      │
-│                                                                    │
-│   ~/Library/Application Support/com.cluelyhidden.app/              │
-│    ├── secure_storage.json    (Gemini API key, settings)           │
-│    ├── conversations.db       (SQLite: msgs, facts)                 │
-│    ├── captures/              (PNGs, WAVs — opt-in)                │
-│    └── prompts/               (user-edited prompt templates)       │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-## 5. The Hotkey System (7 Actions)
+## 4. The 11 Hotkeys (from cheating-daddy, ported)
 
 | Action ID | Default Hotkey | What it does |
 |---|---|---|
-| `toggle_overlay` | `⌘+Shift+Space` | Show/hide the main overlay |
-| `open_settings` | `⌘+Shift+,` | Open settings window |
-| `screenshot` | `⌘+Shift+S` | Capture screen + send to AI |
-| `audio_toggle` | `⌘+Shift+A` | Start/stop voice recording |
-| `audio_system` | `⌘+Shift+M` | Toggle system audio capture (v0.4) |
-| `focus_input` | `⌘+Shift+I` | Bring overlay forward, focus the input |
-| `move_window` | `⌘+arrows` | Hold ⌘ and press arrows to reposition |
+| `toggle_visibility` | **`⌘+\\`** | Show/hide the window (not `⌘+Shift+Space` — backslash is more unique) |
+| `next_step` | `⌘+Enter` | Context-sensitive: starts session OR takes screenshot for AI analysis |
+| `emergency_erase` | **`⌘+Shift+E`** | **Panic button**: hide window, close AI, wipe local data, quit |
+| `toggle_click_through` | `⌘+M` | Make overlay ignore mouse (or capture it) |
+| `move_up` | `Alt+↑` | Move window up 10% of screen |
+| `move_down` | `Alt+↓` | Move window down |
+| `move_left` | `Alt+←` | Move window left |
+| `move_right` | `Alt+→` | Move window right |
+| `previous_response` | `⌘+[` | Cycle to previous AI response in this session |
+| `next_response` | `⌘+]` | Cycle to next AI response |
+| `scroll_up` | `⌘+Shift+↑` | Scroll response area up |
+| `scroll_down` | `⌘+Shift+↓` | Scroll response area down |
 
-The action_id dispatch pattern (from Pluely) is the way: every registered shortcut has an action_id, the handler dispatches by action_id, the frontend can also subscribe to action events for custom UI.
+All rebindable from Settings.
 
-## 6. The 7 System Prompts (Ported from Pluely)
+## 5. The 6 Prompt Profiles (from cheating-daddy, ported)
 
-1. **real_time_translator** — "Listen and translate"
-2. **meeting_assistant** — "Listen, summarize, action items"
-3. **interview_assistant** — "Answer interview Q's with my resume + JD context"
-4. **technical_interview** — "Coding/system design hints"
-5. **presentation_coach** — "Delivery, talking points, confidence"
-6. **learning_companion** — "Explain concepts, suggest questions"
-7. **customer_service** — "Quick responses, solutions, talking points"
+1. **interview** — "AI-powered interview teleprompter. Concise, ready-to-speak answers."
+2. **sales** — "Exact words the salesperson should say to prospects."
+3. **meeting** — "Exact words to say during professional meetings."
+4. **presentation** — "Exact words the presenter should say."
+5. **negotiation** — "Exact words during business negotiations."
+6. **exam** — "Direct, accurate answers to exam questions."
 
-Each prompt is editable in the UI. Stored in SQLite.
+Each profile is editable. Custom profiles can be created. Stored in SQLite.
 
-## 7. Stealth Checklist (P0)
-
-| Requirement | How |
-|---|---|
-| Invisible in screen-share | `.content_protected(true)` on overlay window |
-| Hidden from Dock | `.skip_taskbar(true)` + `app.set_activation_policy(Accessory)` |
-| Hidden from Cmd+Tab | Same as above — accessory apps don't appear |
-| Not in macOS screenshots | `content_protected(true)` covers this |
-| Not in screen recordings | `content_protected(true)` covers this |
-| Process hidden in Activity Monitor | ❌ Not possible (Mac shows all processes). We make the WINDOW invisible, not the process. |
-| No log entries revealing the app | All paths under `~/Library/Application Support/com.cluelyhidden.app/` |
-| Tray icon only presence | `.icon_as_template(true)` for menu bar adaption |
-
-## 8. IPC Contract
-
-```typescript
-// Window
-toggle_overlay(): void
-open_settings(): void
-move_window(direction: "up"|"down"|"left"|"right", step: number): void
-set_click_through(enabled: boolean): void
-
-// Capture
-capture_screen(): { id, path, width, height }
-start_audio_capture(): void
-stop_audio_capture(): { id, path, duration_ms, transcript? }
-
-// AI (Gemini)
-chat_stream(input: ChatInput): AsyncIterable<ChatChunk>  // SSE
-list_models(): ModelInfo[]
-get_active_prompt(): SystemPrompt
-set_active_prompt(id: string): void
-
-// Prompts
-list_prompts(): SystemPrompt[]
-create_prompt(input: PromptInput): SystemPrompt
-update_prompt(id: string, patch: PromptInput): SystemPrompt
-delete_prompt(id: string): void
-
-// Conversations
-list_conversations(): Conversation[]
-create_conversation(): Conversation
-list_messages(conversationId: string): Message[]
-save_message(message: Message): void
-delete_conversation(id: string): void
-
-// Settings
-get_settings(): AppSettings
-update_settings(patch: Partial<AppSettings>): AppSettings
-set_api_key(key: string): void         // stored in secure_storage.json
-has_api_key(): boolean
-validate_api_key(): { valid: boolean, error?: string }
-
-// Events (Rust → JS)
-"overlay:visibility" → boolean
-"audio:level" → number               // 0.0-1.0 for waveform UI
-"audio:transcript" → string          // partial STT
-"shortcut:triggered" → { action: string }
-"capture:complete" → { id, path }
+The system prompt structure (from cheating-daddy):
+```
+{intro}
+{formatRequirements}
+{searchUsage}     // only if Google Search enabled
+{content}          // with examples
+User-provided context
+-----
+{customPrompt}
+-----
+{outputInstructions}
 ```
 
-## 9. Data Model (SQLite)
+## 6. The 2-Model AI Architecture (from cheating-daddy)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  macOS Desktop                                              │
+│                                                             │
+│  ┌──────────────────────┐                                  │
+│  │  User speaks         │                                  │
+│  │  (mic + system audio)│                                  │
+│  └──────────┬───────────┘                                  │
+│             ▼                                              │
+│  ┌──────────────────────┐    ┌──────────────────────────┐  │
+│  │  cpal / scaudiokit   │───▶│  Gemini Live (WebSocket) │  │
+│  │  capture + VAD       │    │  model: gemini-live-2.5  │  │
+│  └──────────────────────┘    │  - real-time audio       │  │
+│                              │  - speaker diarization    │  │
+│                              │  - transcription         │  │
+│                              └─────────────┬────────────┘  │
+│                                            │              │
+│                            on generationComplete           │
+│                                            ▼              │
+│                              ┌──────────────────────────┐  │
+│                              │  Fast Response LLM       │  │
+│                              │  (Groq / Gemma / Flash)  │  │
+│                              │  ~200ms response time    │  │
+│                              └─────────────┬────────────┘  │
+│                                            │              │
+│                                            ▼              │
+│                              ┌──────────────────────────┐  │
+│                              │  Stealth overlay UI      │  │
+│                              │  streams response in     │  │
+│                              │  real-time               │  │
+│                              └──────────────────────────┘  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key insight:** Gemini Live is the LISTENER (real-time WebSocket, persistent, ~free), but the RESPONDER is a separate fast LLM (~200ms). This decouples "I heard you" from "here's my answer" and gives sub-300ms total latency.
+
+## 7. The View Architecture (from cheating-daddy)
+
+Single window, multiple "views" switched via state — not React Router (cheating-daddy uses Lit). We use React state.
+
+| View | Purpose |
+|---|---|
+| `MainView` | Landing/profile selection/API key entry |
+| `AssistantView` | The live assistant (status, transcription, responses, screenshots) |
+| `OnboardingView` | First-run wizard (4 steps) |
+| `CustomizeView` | Appearance, themes, font size, transparency |
+| `AICustomizeView` | Profile editor, model selection, Google Search toggle, custom prompt |
+| `HistoryView` | Past sessions (search, replay, delete) |
+| `HelpView` | Documentation |
+| `FeedbackView` | Send feedback (mailto: or web form) |
+
+Single window, no separate settings window. Settings are a view. The overlay toggle hides/shows the entire window.
+
+## 8. The Storage Layout
+
+```
+~/Library/Application Support/com.cluelyhidden.app/
+├── secure_storage.json         # API keys (0600)
+├── cluely.db                   # SQLite: conversations, messages, profiles, settings
+├── captures/                   # PNG screenshots, WAV audio
+└── logs/                       # app logs (rotated)
+```
+
+**SQLite schema** (conversations + profiles):
 
 ```sql
--- Conversations
 CREATE TABLE conversations (
   id TEXT PRIMARY KEY,
   title TEXT,
-  prompt_id TEXT REFERENCES prompts(id),
+  profile_id TEXT REFERENCES profiles(id),
   created_at INTEGER,
   updated_at INTEGER
 );
 
--- Messages
 CREATE TABLE messages (
   id TEXT PRIMARY KEY,
   conversation_id TEXT REFERENCES conversations(id),
   role TEXT CHECK(role IN ('user', 'assistant', 'system')),
   content TEXT,
+  audio_transcript TEXT,        -- Gemini's input transcription
+  screenshot_id TEXT REFERENCES captures(id),
   created_at INTEGER,
-  tokens_used INTEGER,
   model TEXT,
-  attachments TEXT  -- JSON array of file refs
+  tokens_in INTEGER,
+  tokens_out INTEGER
 );
 
--- User prompts (the 7 templates + custom)
-CREATE TABLE prompts (
+CREATE TABLE profiles (
   id TEXT PRIMARY KEY,
   name TEXT,
-  prompt TEXT,
-  is_template INTEGER DEFAULT 0,  -- 1 = built-in, 0 = user-created
+  system_prompt TEXT,
+  is_builtin INTEGER DEFAULT 0,
+  position INTEGER DEFAULT 0,
   created_at INTEGER,
   updated_at INTEGER
 );
 
--- Captures (opt-in)
 CREATE TABLE captures (
   id TEXT PRIMARY KEY,
   kind TEXT CHECK(kind IN ('screen', 'audio')),
@@ -220,65 +195,69 @@ CREATE TABLE captures (
   width INTEGER,
   height INTEGER,
   duration_ms INTEGER,
-  created_at INTEGER,
-  conversation_id TEXT REFERENCES conversations(id)
+  created_at INTEGER
 );
 
--- Settings (in addition to secure_storage.json)
--- Stored as key-value for flexibility
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
   value TEXT  -- JSON
 );
+
+-- On first launch, seed with 6 builtin profiles from cheating-daddy
 ```
 
-## 10. Phased Delivery (Revised)
+## 9. The Stealth Layer (deeper than Pluely)
+
+| macOS API | Tauri 2 equivalent | Source |
+|---|---|---|
+| `NSWindow.sharingType = .none` | `.content_protected(true)` | Pluely |
+| `LSUIElement = true` (no Dock) | `app.set_activation_policy(Accessory)` | Both |
+| Hidden from Mission Control | `setHiddenInMissionControl` (Electron) → ??? in Tauri | Cheating-daddy |
+| Hidden from Cmd+Tab | Accessory policy covers this | Both |
+| Invisible in screenshots | `content_protected(true)` covers this | Pluely |
+| `setVisibleOnAllWorkspaces` | Tauri: set on all workspaces via `set_visible_on_all_workspaces(true)` | Cheating-daddy |
+| Invisible in fullscreen | `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` | Cheating-daddy |
+
+**TBD:** How to do `setHiddenInMissionControl` in Tauri 2. May need raw `objc2` call. If too complex, skip (Mission Control exposure is minor).
+
+## 10. Phased Delivery (10 phases)
 
 | Phase | Focus | Deliverable |
 |---|---|---|
-| **0** ✅ | Scaffold + working hello-world | Done (commit 2728b44) |
-| **0b** ✅ | Stealth + working .app | Done (commit afd1633) |
-| **1** | **P0: Maximum stealth** | `content_protected`, Accessory policy, hidden from Cmd+Tab, no Dock icon, click-through |
-| **2** | **P0: Multi-hotkey system** | 7 hotkeys with action_id dispatch, rebindable from settings |
-| **3** | **P0: Real Gemini integration** | Streaming chat, API key in secure storage, model picker, 7 prompt templates |
-| **4** | **P0: Chat UI polish** | Markdown rendering, code blocks, streaming animation, message history |
-| **5** | **P0: Settings UI** | Hotkey rebinding, model picker, prompt editor, capture toggles, API key input |
-| **6** | **P0: Screen capture** | `⌘+Shift+S` captures screen → auto-attaches to next message |
-| **7** | **P1: Audio capture + STT** | Push-to-talk, waveform, VAD, Gemini transcribes audio |
-| **8** | **P0: System audio capture** | Captures meeting audio (ScreenCaptureKit) |
-| **9** | **P0: Conversation persistence** | SQLite, history sidebar, search |
-| **10** | **P1: Memory + fact extraction** | Gemini extracts user facts from conversations, surfaces them in responses |
-| **11** | **P0: Final ship** | Signed .dmg, notarized, polished |
+| **0** ✅ | Scaffold + hello-world | Done (commit 2728b44) |
+| **1** ✅ | P0 stealth (content_protected, Accessory) | Done (commit 9f56263) |
+| **2** | **P0 11-hotkey system + emergency erase** | Replace single hotkey, add 11 actions, panic button |
+| **3** | **P0 view architecture + 6 profiles** | Onboarding, Main, Assistant, Customize, AI Customize, History, Help views. 6 builtin profiles seeded to DB. |
+| **4** | **P0 Gemini Live integration** | Real-time audio, speaker diarization, streaming response |
+| **5** | **P0 Screenshot-driven UX** | ⌘+Enter takes screenshot, attaches to message, response streams |
+| **6** | **P0 Emergency erase** | ⌘+Shift+E wires up the panic button |
+| **7** | **P1 System audio capture** | Capture meeting audio, transcribe, feed to AI |
+| **8** | **P1 Fallback providers** | Ollama (local) + Groq (cloud) — pluggable |
+| **9** | **P0 Conversation history + persistence** | SQLite CRUD, HistoryView |
+| **10** | **P0 Final ship** | App icon, code signing, notarization, polished .dmg |
 
 ## 11. Performance Budget
 
 | Metric | Target |
 |---|---|
-| App cold start (cached) | < 500ms |
-| Hotkey → overlay visible | < 100ms |
-| Overlay first paint (Vite) | < 300ms |
-| Idle RAM (overlay hidden) | < 40MB |
-| Idle RAM (overlay visible) | < 100MB |
-| First Gemini token (gemini-2.0-flash) | < 800ms |
+| App cold start (cached) | < 400ms |
+| Hotkey → overlay visible | < 80ms |
+| Gemini Live first connect | < 1.5s |
+| First response token (Live + Groq) | < 500ms |
+| Screenshot capture + encode | < 200ms |
 | Streaming tokens/sec | > 50 |
-| Screen capture + encode | < 200ms |
-| Audio capture latency | < 50ms |
+| Idle RAM (overlay hidden) | < 35MB |
+| Idle RAM (overlay visible, no AI) | < 80MB |
+| Active RAM (Live + Groq responding) | < 200MB |
+| Binary size (uncompressed) | < 15MB |
+| DMG size | < 25MB |
 
 ## 12. Security & Privacy
 
-- **API key in `~/Library/Application Support/com.cluelyhidden.app/secure_storage.json`** — never logged, never sent anywhere except Gemini
-- **No telemetry, no analytics**
-- **Screen captures stored locally** — never uploaded unless user explicitly shares in chat
-- **Audio recordings stored locally** — same rule
-- **All conversations in local SQLite** — never synced
-- **macOS sandbox:** Not sandboxed (we need global hotkeys + screen capture). Notarized for distribution.
-- **Permissions requested:** Accessibility (hotkeys), Screen Recording (capture), Microphone (audio)
-
-## 13. Why Gemini
-
-- **Multimodal native** — text + images + audio in one call (perfect for screenshots + voice)
-- **Fast (gemini-2.0-flash)** — 50+ tok/s
-- **Smart (gemini-2.5-pro)** — when you need it
-- **Free tier is generous** — 15 RPM, 1M TPM, 1500 RPD
-- **API key from AI Studio** — `aistudio.google.com/apikey` — one click, free
-- **No vendor lock-in for prompts** — same prompts work with OpenAI/Claude if user adds their key later
+- **API keys** in `secure_storage.json` with 0600 perms. Never logged, never sent anywhere except Gemini/Groq.
+- **No telemetry, no analytics, no auto-update pings.**
+- **Captures stored locally**, never uploaded automatically. Only attached to a chat message if user clicks send.
+- **Conversations in local SQLite**, never synced.
+- **Emergency erase** (⌘+Shift+E): closes Gemini session, clears the in-memory conversation state, hides window, quits app. SQLite history is preserved (user can review later) but the live session is gone.
+- **macOS sandboxing:** not sandboxed (need global hotkeys + screen recording). Notarized for distribution.
+- **Permissions requested:** Accessibility (hotkeys), Screen Recording (capture), Microphone (audio).

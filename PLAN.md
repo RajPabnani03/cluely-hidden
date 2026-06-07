@@ -1,512 +1,431 @@
-# Cluely-Hidden — Build Plan v0.2.0 (P0 Stealth + Gemini)
+# Cluely-Hidden — Build Plan v0.3.0 (Cheating-Daddy Inspired)
 
-> Each phase = 1 subagent dispatch with 2-stage review.
-> Sequential phases (P1 must finish before P2 starts) — but inside a phase, tasks can run in parallel.
+> Each phase = 1+ subagent dispatches with 2-stage review (spec + quality).
+> Sequential phases, but tasks within a phase can be parallel.
+> All new subagent dispatches go to fresh subagents — clean context.
 
 ---
 
 ## ✅ Phase 0: Scaffold + Hello-World
-- Status: DONE
-- Commit: `2728b44`
-- App launches, tray icon works, ⌘+Shift+Space toggles overlay, stub chat echoes
+- Status: DONE (commit 2728b44)
 
-## ✅ Phase 0b: Stealth compilation fix
-- Status: DONE
-- Commit: `afd1633`
-- `image-png` feature enabled, removed unused imports, build succeeds
+## ✅ Phase 1: P0 Stealth (content_protected, Accessory)
+- Status: DONE (commit 9f56263)
+- App is invisible in screen-share, hidden from Dock, hidden from Cmd+Tab
 
 ---
 
-## 🚧 Phase 1: P0 — Maximum Stealth
+## 🚧 Phase 2: 11-Hotkey System + Emergency Erase
 
-**Goal:** The window is invisible in Zoom/Meet/Teams/Discord screen-share, hidden from Dock, hidden from Cmd+Tab, and not in macOS screenshots. No one knows it's running.
+**Goal:** Replace the single `⌘+Shift+Space` with 11 rebindable actions. Add the panic button.
 
-**Why now:** Everything else is meaningless if the app is visible. Stealth is the foundation.
+**Reference:** `~/Code/cheating-daddy/src/utils/window.js: getDefaultKeybinds()`
 
-**Files to modify:**
-- `src-tauri/Cargo.toml` — no change (features already right)
-- `src-tauri/tauri.conf.json` — remove `visible: false` from main window? No, keep hidden by default. Add `titleBarStyle: "Overlay"`.
-- `src-tauri/src/lib.rs` — set `ActivationPolicy::Accessory` in setup hook
-- `src-tauri/src/window/overlay.rs` — add `content_protected(true)`, `hidden_title(true)`, `title_bar_style(Overlay)`
+**New files:**
+- `src-tauri/src/hotkeys/mod.rs` — module root
+- `src-tauri/src/hotkeys/actions.rs` — 11 action_id enum + handlers
+- `src-tauri/src/hotkeys/registry.rs` — register/unregister/rebind
+- `src-tauri/src/state.rs` — `HotkeyState` with bindings map
 
-**Subagent tasks (sequential — they touch the same file):**
+**Modified files:**
+- `src-tauri/src/lib.rs` — wire up new hotkey system
+- `src-tauri/src/ipc/commands.rs` — add `rebind_hotkey`, `get_hotkey_bindings`, `emergency_erase` commands
+- `src/lib/tauri.ts` — typed wrappers
+- `src/lib/store.ts` — zustand slice
+- `src/routes/Settings.tsx` — add Hotkeys section (basic for now, full recorder in Phase 5)
 
-### Task 1.1: Add `content_protected(true)` to overlay window
-- File: `src-tauri/src/window/overlay.rs`
-- Add `.content_protected(true)` to the WebviewWindowBuilder chain
-- Verify: build, launch, take a screenshot (Cmd+Shift+3), confirm no overlay window in the screenshot
-- Test in Zoom/Meet/Discord screen-share if possible
+**Subagent tasks (sequential — all touch the registry):**
 
-### Task 1.2: Set ActivationPolicy to Accessory
-- File: `src-tauri/src/lib.rs`
-- In `setup`, after creating the overlay, call:
-  ```rust
-  app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-  ```
-  Wait — `app` is `&mut App`, and the API is `app.set_activation_policy(...)` directly on `App` (not `AppHandle`).
-- Verify: launch, check Cmd+Tab (Cluely Hidden should NOT be in the app switcher), check Dock (no icon)
+### Task 2.1: Define HotkeyAction enum + defaults
+- 11 variants: `ToggleVisibility`, `NextStep`, `EmergencyErase`, `ToggleClickThrough`, `MoveUp`, `MoveDown`, `MoveLeft`, `MoveRight`, `PreviousResponse`, `NextResponse`, `ScrollUp`, `ScrollDown`
+- Each has: action_id (string), default key (per platform), handler fn
+- Port the keybinds from cheating-daddy verbatim (Cmd+\, Cmd+Enter, etc)
 
-### Task 1.3: Add `title_bar_style(Overlay)` + `hidden_title(true)` to overlay
-- File: `src-tauri/src/window/overlay.rs`
-- These are macOS-only — use `#[cfg(target_os = "macos")]`
-- Verify: build, launch, the overlay window should have a sleek overlay-style title bar (for drag area) when shown
+### Task 2.2: Build HotkeyRegistry
+- `register_all(app, bindings)` — registers all 11 with the global-shortcut plugin
+- `unregister_all(app)` — for rebind flow
+- `rebind(app, action_id, new_key)` — unregister old, register new
+- Each handler dispatches to the action function
+
+### Task 2.3: Implement EmergencyErase
+- Handler: `app.hide()` → close any active AI session → `app.exit(0)`
+- 300ms delay between hide and quit (so user sees the window disappear)
+- **Wired to ⌘+Shift+E by default**
+
+### Task 2.4: Wire all 11 into lib.rs
+- Replace the single `Shortcut::new(...)` registration with `registry.register_all(...)`
+- Default state loaded from `HotkeyState::default_bindings()`
+
+### Task 2.5: TypeScript + IPC
+- Add `getHotkeyBindings()`, `rebindHotkey(action, key)`, `onShortcutTriggered(cb)` to `src/lib/tauri.ts`
+- Add `hotkeyBindings` slice to zustand
+- Add basic hotkey display in Settings (just shows current bindings, no editor yet)
 
 **Acceptance criteria:**
-- [ ] App is not in macOS Dock
-- [ ] App is not in Cmd+Tab app switcher
-- [ ] Overlay window does NOT appear in macOS screenshot (Cmd+Shift+3)
-- [ ] Overlay window does NOT appear in Zoom/Meet/Teams/Discord screen-share
-- [ ] Tray icon IS visible in menu bar
-- [ ] ⌘+Shift+Space still summons overlay
-- [ ] Overlay can be clicked, dragged, dismissed
-
-**Subagent for this phase: `rust-stealth-window-lead`**
+- [ ] All 11 hotkeys work as specified
+- [ ] ⌘+Shift+E (Emergency Erase) hides the window + quits the app
+- [ ] Frontend can read bindings via `getHotkeyBindings()`
+- [ ] Hotkey events are emitted to the frontend for UI updates
 
 ---
 
-## 🚧 Phase 2: P0 — Multi-Hotkey System (7 Actions)
+## 🚧 Phase 3: View Architecture + 6 Prompt Profiles
 
-**Goal:** Replace the single `⌘+Shift+Space` with 7 action-based hotkeys. Settings will let users rebind them.
+**Goal:** Single window, multi-view router. 6 builtin profiles seeded to SQLite.
 
-**Files to modify:**
-- `src-tauri/src/hotkeys/mod.rs` (new) — action_id-based dispatch
-- `src-tauri/src/hotkeys/actions.rs` (new) — the 7 action handlers
-- `src-tauri/src/hotkeys/registry.rs` (new) — register/unregister/rebind
-- `src-tauri/src/lib.rs` — wire up the new hotkey system
-- `src-tauri/src/state.rs` (new) — `HotkeyState` with the bindings map
-- `src/lib/tauri.ts` — typed wrappers for the 7 actions
-- `src/lib/store.ts` — zustand slice for hotkey bindings
-- `src/routes/Settings.tsx` — add Hotkeys section
+**New files:**
+- `src/lib/router.ts` — simple view state machine (zustand-backed)
+- `src/routes/views/MainView.tsx` — landing/profile select
+- `src/routes/views/AssistantView.tsx` — live AI assistant
+- `src/routes/views/OnboardingView.tsx` — 4-step first run
+- `src/routes/views/CustomizeView.tsx` — appearance
+- `src/routes/views/AICustomizeView.tsx` — AI + profile editor
+- `src/routes/views/HistoryView.tsx` — past sessions
+- `src/routes/views/HelpView.tsx` — docs
+- `src/lib/profiles.ts` — the 6 builtin profile definitions (port from cheating-daddy)
+
+**New Rust:**
+- `src-tauri/src/db/mod.rs` — rusqlite + migrations
+- `src-tauri/src/db/profiles.rs` — profile CRUD
+- `src-tauri/src/db/conversations.rs` — conversation CRUD
+- `src-tauri/src/db/messages.rs` — message CRUD
+- `src-tauri/src/ipc/commands.rs` — add `list_profiles`, `create_profile`, `update_profile`, `delete_profile`, `list_conversations`, `create_conversation`, `list_messages`, `save_message`
+
+**Modified files:**
+- `src/App.tsx` — render the active view based on router state
+- `src-tauri/Cargo.toml` — add `rusqlite = { version = "0.31", features = ["bundled"] }`, `uuid`, `chrono`
 
 **Subagent tasks:**
 
-### Task 2.1: Define the 7 action_ids + defaults
-- File: `src-tauri/src/hotkeys/actions.rs`
-- Enum `HotkeyAction` with 7 variants
-- Each has a default key combo per platform
-- Each maps to a function `(&AppHandle) -> Result<()>`
+### Task 3.1: SQLite setup + migrations
+- File: `src-tauri/src/db/mod.rs`
+- Opens/creates `~/Library/Application Support/com.cluelyhidden.app/cluely.db`
+- Runs migrations for conversations, messages, profiles, captures, settings tables
+- On first run, seeds the 6 builtin profiles
 
-### Task 2.2: Build the registry
-- File: `src-tauri/src/hotkeys/registry.rs`
-- `HotkeyRegistry` stores `HashMap<HotkeyAction, Shortcut>`
-- `register_all(app)` registers all 7
-- `unregister_all(app)` for rebind flow
-- `rebind(app, action, new_shortcut)` swaps one
-- Each shortcut has a handler that dispatches to the action function
+### Task 3.2: Port the 6 profiles from cheating-daddy
+- File: `src/lib/profiles.ts`
+- Direct port of `src/utils/prompts.js` from cheating-daddy
+- Each profile has: id, name, systemPrompt (the full composed string)
+- Available in both Rust (for the actual prompt) and TS (for the UI)
 
-### Task 2.3: Wire it into lib.rs
-- File: `src-tauri/src/lib.rs`
-- In setup: call `registry.register_all(&app.handle())`
-- Expose `rebind_hotkey` and `get_hotkey_bindings` as `#[tauri::command]`
+### Task 3.3: Profile + conversation DB CRUD
+- Files: `src-tauri/src/db/{profiles,conversations,messages}.rs`
+- Standard CRUD: list, get, create, update, delete
+- Return JSON-serializable structs
 
-### Task 2.4: TypeScript side
-- File: `src/lib/tauri.ts`
-- Add wrappers: `getHotkeyBindings()`, `rebindHotkey(action, key)`, `onShortcutTriggered(cb)`
-- File: `src/lib/store.ts`
-- Add `hotkeyBindings` slice
+### Task 3.4: View router
+- File: `src/lib/router.ts`
+- Zustand slice with `view: 'main' | 'assistant' | 'onboarding' | 'customize' | 'ai-customize' | 'history' | 'help'`
+- `setView(view)`, `navigate(view, params?)` functions
+
+### Task 3.5: Build the 7 views (React)
+- Each view is a simple component, dark-themed, ~200-400 lines each
+- Navigation: sidebar with icons, click to switch view
+- Onboarding: 4 steps with progress bar
+- Main: profile dropdown + "Start" button
+- Assistant: large response area + status indicator (port the "Listening..." pattern)
+- History: list of past sessions, search bar, click to load
+- Help: keyboard shortcut reference + FAQ
+- Customize: theme picker, font size, transparency
+- AI Customize: profile editor, model picker, Google Search toggle
+
+### Task 3.6: Wire App.tsx to render the active view
+- Single window, single `<App>` component, renders the active view
+- Sidebar nav on left
+- When overlay is shown, render the active view (default: Assistant)
 
 **Acceptance criteria:**
-- [ ] All 7 hotkeys fire and dispatch the right action
-- [ ] Frontend can read current bindings via `getHotkeyBindings()`
-- [ ] Frontend can rebind via `rebindHotkey('toggle_overlay', 'Cmd+Shift+D')` and it works immediately
-- [ ] Settings UI shows current bindings and lets user rebind each
+- [ ] Single window, 7 views accessible via sidebar
+- [ ] Onboarding shows on first launch
+- [ ] 6 profiles are seeded and selectable
+- [ ] Profile selection persists across launches
+- [ ] Can create/edit/delete custom profiles
+- [ ] History view shows past conversations (empty for now)
+- [ ] UI is dark-mode by default, slick
 
 ---
 
-## 🚧 Phase 3: P0 — Real Gemini Integration
+## 🚧 Phase 4: Gemini Live Integration (Real-Time)
 
-**Goal:** Replace the stub `chat` command with a real streaming call to Google Gemini. API key in secure storage. 3 models (flash, flash-thinking, pro). 7 prompt templates.
+**Goal:** Wire up `@google/genai` for real-time audio + streaming text responses. Sub-300ms response time.
 
-**Files:**
-- `src-tauri/src/ai/mod.rs` (new) — module root
-- `src-tauri/src/ai/gemini.rs` (new) — Gemini API client (reqwest + SSE)
-- `src-tauri/src/ai/router.rs` (new) — model picker, prompt selection
-- `src-tauri/src/ai/prompts.rs` (new) — the 7 prompt templates
-- `src-tauri/src/storage.rs` (new) — secure_storage.json read/write
-- `src-tauri/src/db/mod.rs` (new) — rusqlite connection + migrations
-- `src-tauri/src/db/prompts.rs` (new) — prompt CRUD
-- `src-tauri/src/db/conversations.rs` (new) — conversation CRUD
-- `src-tauri/src/ipc/commands.rs` — replace stub `chat` with real one
-- `src-tauri/Cargo.toml` — add reqwest, rusqlite, tokio, futures
-- `src/lib/tauri.ts` — typed streaming chat
-- `src/components/ChatStream.tsx` — handle streaming chunks
-- `src/components/InputBar.tsx` — call chat_stream
-- `src/routes/Settings.tsx` — add API key + model picker + prompt selector
-- `src/lib/prompts.ts` (new) — the 7 prompt constants
+**New Rust:**
+- `src-tauri/src/ai/mod.rs` — module root
+- `src-tauri/src/ai/gemini_live.rs` — Gemini Live WebSocket client
+- `src-tauri/src/ai/responder.rs` — fast response LLM (Groq/Gemma/Ollama)
+- `src-tauri/src/ai/router.rs` — orchestrates: Live listens, Responder responds
+- `src-tauri/Cargo.toml` — add `tungstenite`, `tokio-tungstenite`, `serde_json`
 
-**Subagent tasks (parallel where possible):**
+**New frontend:**
+- `src/lib/gemini.ts` — typed wrappers
+- `src/components/StatusBar.tsx` — "Listening..." / "Reconnecting..." / "Thinking..." status
 
-### Task 3.1: Secure storage for API key
+**Subagent tasks:**
+
+### Task 4.1: Gemini Live WebSocket client
+- File: `src-tauri/src/ai/gemini_live.rs`
+- Connect to `wss://generativelanguage.googleapis.com/ws/...`
+- Send `setup` message with model + system instruction + tools
+- Send audio chunks (100ms, 24kHz PCM)
+- Receive `serverContent` events with `inputTranscription` + `generationComplete`
+- Speaker diarization enabled
+- Auto-reconnect (max 3 attempts, 2s delay) — port the reconnect logic
+
+### Task 4.2: Fast responder (Gemini Flash HTTP)
+- File: `src-tauri/src/ai/responder.rs`
+- `respond(transcript) -> Stream<String>` using Gemini Flash HTTP streaming
+- Or Groq if user provides a key
+- Or Ollama if user wants local
+- Returns SSE chunks
+
+### Task 4.3: Router orchestration
+- File: `src-tauri/src/ai/router.rs`
+- State machine: `Idle → Listening → Thinking → Responding → Idle`
+- On `generationComplete` from Live → call Responder → stream to frontend
+- Emit Tauri events: `ai:status`, `ai:transcript`, `ai:response:chunk`, `ai:response:complete`
+
+### Task 4.4: Frontend status + streaming
+- File: `src/components/StatusBar.tsx`
+- Shows current state with color coding: gray (idle), green (listening), yellow (thinking), blue (responding)
+- Animated dot indicator
+- File: `src/routes/views/AssistantView.tsx` — refactor to listen for `ai:*` events and render
+
+### Task 4.5: API key management
 - File: `src-tauri/src/storage.rs`
-- `set_api_key(key)`, `get_api_key() -> Option<String>`, `has_api_key() -> bool`
-- Stored in `~/Library/Application Support/com.cluelyhidden.app/secure_storage.json`
-- File mode 0600 (owner read/write only)
-- Add `set_api_key`, `has_api_key` commands
-
-### Task 3.2: SQLite + migrations
-- File: `src-tauri/src/db/mod.rs`
-- Opens/creates `conversations.db`
-- Runs migrations: conversations, messages, prompts, captures, settings tables
-- All schema from ARCHITECTURE §9
-
-### Task 3.3: Gemini API client
-- File: `src-tauri/src/ai/gemini.rs`
-- `GeminiClient::stream_chat(messages, model) -> impl Stream<Item=Result<String>>`
-- Uses Gemini's OpenAI-compatible endpoint OR native API (you pick based on what's simpler)
-- Streams tokens back via Tauri events: `chat:chunk` events
-
-### Task 3.4: The 7 prompt templates
-- File: `src-tauri/src/ai/prompts.rs` + `src/lib/prompts.ts`
-- Port all 7 from Pluely's `lib/platform-instructions.ts`
-- On first launch, seed the DB with these as `is_template=1`
-
-### Task 3.5: Wire the chat command
-- File: `src-tauri/src/ipc/commands.rs`
-- Replace stub `chat` with real `chat_stream`
-- Accepts `{ conversation_id, message, attachments, model?, prompt_id? }`
-- Loads conversation history from DB
-- Loads the active prompt
-- Calls Gemini
-- Streams chunks via Tauri events
-- Saves user + assistant messages to DB
-
-### Task 3.6: Frontend chat UI
-- File: `src/components/ChatStream.tsx`
-- Listen for `chat:chunk` events, append to last assistant message
-- Show typing indicator while waiting
-- Render markdown (use `react-markdown`)
-- File: `src/components/InputBar.tsx`
-- Call `chat_stream`, handle streaming
-- Show stop button while streaming
-
-### Task 3.7: Settings — API key input
-- File: `src/routes/Settings.tsx`
-- Password input for API key (mask with dots)
-- "Test" button: validates the key with a tiny Gemini call
-- "Save" button: stores in secure storage
-- "Where do I get a key?" link to `aistudio.google.com/apikey`
-
-### Task 3.8: Settings — Model picker + Prompt selector
-- File: `src/routes/Settings.tsx`
-- Model dropdown: gemini-2.0-flash, gemini-2.0-flash-thinking, gemini-2.5-pro
-- Prompt dropdown: the 7 templates, plus "Custom" for user-edited
-- Selection stored in `settings` table
+- Secure storage for Gemini API key (and Groq if used)
+- File: `src/routes/views/MainView.tsx` — add API key input on first launch
+- "Test connection" button validates the key with a tiny Gemini call
 
 **Acceptance criteria:**
 - [ ] User can paste Gemini API key, save it, validate it
-- [ ] User can pick a model
-- [ ] User can pick a prompt template
-- [ ] Sending a message in overlay returns a real streamed response from Gemini
-- [ ] Conversation is saved to SQLite and restored on next launch
-- [ ] All 7 prompt templates are available and selectable
-- [ ] Markdown is rendered (code blocks, bold, italic, lists)
-- [ ] Streaming animation feels smooth
-
-**Subagent for this phase: `ai-integration-lead` (Rust) + `chat-ui-lead` (React), parallel**
+- [ ] User can start a session, speak, see real-time transcription
+- [ ] AI response streams in within 500ms of stopping speech
+- [ ] Status bar shows current state correctly
+- [ ] Auto-reconnect works if connection drops
+- [ ] Conversation is saved to SQLite
 
 ---
 
-## 🚧 Phase 4: P0 — Chat UI Polish
+## 🚧 Phase 5: Screenshot-Driven UX
 
-**Goal:** The chat panel feels like Linear or Notion AI. Sleek, fast, beautiful.
+**Goal:** `⌘+Enter` takes a screenshot, attaches to the next message, AI analyzes + responds.
 
-**Files:**
-- `src/components/Message.tsx` (new) — single message bubble with markdown
-- `src/components/ChatStream.tsx` — refactor to use Message
-- `src/components/CodeBlock.tsx` (new) — syntax-highlighted code blocks
-- `src/components/TypingDots.tsx` (new) — animated typing indicator
-- `src/lib/markdown.ts` (new) — markdown config (sanitize, plugins)
-
-**Subagent tasks:**
-
-### Task 4.1: Message component
-- File: `src/components/Message.tsx`
-- Props: `{ role, content, streaming }`
-- User messages: right-aligned, primary color bubble
-- Assistant: left-aligned, muted color bubble
-- Markdown via `react-markdown` with `remark-gfm`
-- Code blocks via `CodeBlock`
-
-### Task 4.2: Code block
-- File: `src/components/CodeBlock.tsx`
-- Use `shiki` or `prism-react-renderer` for syntax highlighting
-- Copy button on hover
-- Language label
-
-### Task 4.3: Typing animation
-- File: `src/components/TypingDots.tsx`
-- Three dots that fade in/out with stagger
-- Used while waiting for first chunk
-- After first chunk: stop showing, show the message with a `streaming` cursor
-
-**Acceptance criteria:**
-- [ ] User and assistant messages visually distinct
-- [ ] Markdown renders correctly (headings, lists, code, bold, italic)
-- [ ] Code blocks have syntax highlighting + copy button
-- [ ] Typing indicator shows while waiting for first chunk
-- [ ] Streaming cursor shows at end of partial response
-- [ ] No layout shift as content streams in
-
----
-
-## 🚧 Phase 5: P0 — Settings UI
-
-**Goal:** The settings window is complete and pleasant. Every setting the user might want to change is here.
-
-**Files:**
-- `src/routes/Settings.tsx` — already exists, refactor heavily
-- `src/components/SettingRow.tsx` (new)
-- `src/components/SettingSection.tsx` (new)
-- `src/components/KeyRecorder.tsx` (new) — for rebinding hotkeys
-- `src/components/ModelPicker.tsx` (new)
-- `src/components/PromptPicker.tsx` (new)
-- `src/components/PromptEditor.tsx` (new) — edit a prompt template
-
-**Subagent tasks:**
-
-### Task 5.1: Settings layout
-- File: `src/routes/Settings.tsx`
-- Sections: General, Hotkeys, AI, Capture, Privacy, About
-- Sticky nav on left, content on right
-- Dark mode by default
-
-### Task 5.2: Hotkey recorder
-- File: `src/components/KeyRecorder.tsx`
-- Click to start recording, then capture the next key combo
-- "Reset to default" button
-- Conflict detection (warn if binding is already used by another action)
-
-### Task 5.3: Prompt editor
-- File: `src/components/PromptEditor.tsx`
-- Edit any of the 7 templates (or create custom)
-- Live preview of the prompt
-- "Restore default" button for templates
-
-**Acceptance criteria:**
-- [ ] All settings persist (hotkey bindings, model, prompt, API key flag, capture toggles)
-- [ ] Settings open via tray menu and via `⌘+Shift+,`
-- [ ] Hotkey recorder works for all 7 actions
-- [ ] Conflicts are detected and shown
-- [ ] Prompt editor saves changes immediately
-
----
-
-## 🚧 Phase 6: P0 — Screen Capture
-
-**Goal:** `⌘+Shift+S` captures the current screen, attaches it to the next chat message, and the user can ask "what's wrong with this code?" or "summarize this article".
-
-**Files:**
-- `src-tauri/src/capture/mod.rs` (new) — module root
-- `src-tauri/src/capture/screen.rs` (new) — xcap-based screen capture
-- `src-tauri/src/capture/store.rs` (new) — save to captures/, insert DB row
-- `src-tauri/Cargo.toml` — add `xcap = "0.0.x"`
+**New Rust:**
+- `src-tauri/src/capture/mod.rs` — module root
+- `src-tauri/src/capture/screen.rs` — xcap-based capture
 - `src-tauri/src/ipc/commands.rs` — add `capture_screen` command
-- `src/lib/tauri.ts` — wrapper
-- `src/components/CapturePreview.tsx` (new) — shows last capture as a thumbnail in overlay
-- `src/components/InputBar.tsx` — camera button sends capture to Gemini
+
+**New frontend:**
+- `src/components/ScreenshotPreview.tsx` — shows last screenshot in assistant view
+- `src/routes/views/AssistantView.tsx` — handle `next_step` action
 
 **Subagent tasks:**
 
-### Task 6.1: Screen capture backend
+### Task 5.1: Screen capture (Rust)
 - File: `src-tauri/src/capture/screen.rs`
-- Uses `xcap::Monitor::all().capture_image()` to grab the primary monitor
+- Uses `xcap::Monitor::all().first().capture_image()`
 - Returns `RgbaImage`, encode to PNG
 - Save to `~/Library/Application Support/com.cluelyhidden.app/captures/{uuid}.png`
 - Insert into `captures` table
+- Emit `capture:complete` event with `{id, path, width, height}`
 
-### Task 6.2: Attach to message
-- File: `src-tauri/src/ai/gemini.rs`
-- `GeminiClient::send_with_image(text, image_path)`
-- Sends text + base64-encoded image to Gemini in one call
-- Gemini Vision handles the rest
+### Task 5.2: Add screenshot to Gemini Live
+- File: `src-tauri/src/ai/gemini_live.rs`
+- Extend to support image input (multimodal)
+- When `next_step` fires, take screenshot → send to Live as image inline
 
-### Task 6.3: Frontend capture flow
-- File: `src/components/CapturePreview.tsx`
-- Shows the last capture as a small thumbnail at the top of the chat
-- "X" to detach
-- File: `src/components/InputBar.tsx`
-- Camera button (⌘+Shift+S) captures and attaches
-- Auto-sends the next message with image
+### Task 5.3: Wire next_step hotkey
+- File: `src-tauri/src/hotkeys/actions.rs`
+- `next_step` handler: take screenshot, send to AI, trigger response
+- File: `src/components/ScreenshotPreview.tsx`
+- Shows the screenshot in the assistant view as a small thumbnail
 
 **Acceptance criteria:**
-- [ ] `⌘+Shift+S` captures the primary screen in < 500ms
-- [ ] Capture thumbnail shows in overlay
-- [ ] Sending a message with capture attached returns a Gemini Vision response
-- [ ] User can detach the capture before sending
-- [ ] Captures are stored locally, never uploaded automatically
+- [ ] `⌘+Enter` takes a screenshot and triggers AI analysis
+- [ ] Screenshot is attached to the next AI response
+- [ ] AI responds with analysis of what's on screen
+- [ ] Screenshot thumbnail visible in assistant view
+- [ ] Captures are stored locally
 
 ---
 
-## 🚧 Phase 7: P1 — Audio Capture + STT
+## 🚧 Phase 6: Emergency Erase
 
-**Goal:** Push-to-talk voice input. Gemini transcribes audio + responds in one call (multimodal).
-
-**Files:**
-- `src-tauri/src/capture/audio.rs` (new) — cpal-based mic capture
-- `src-tauri/Cargo.toml` — add `cpal`, `hound`
-- `src/components/AudioBar.tsx` (new) — recording UI with waveform
+**Goal:** `⌘+Shift+E` is the panic button. Test it works.
 
 **Subagent tasks:**
 
-### Task 7.1: Mic capture backend
-- File: `src-tauri/src/capture/audio.rs`
-- `start_recording()` opens mic stream
-- `stop_recording()` returns WAV bytes
-- Uses cpal for capture, hound for WAV encoding
-- Optional VAD for auto-stop (port VAD config from Pluely)
+### Task 6.1: Wire emergency_erase handler
+- File: `src-tauri/src/hotkeys/actions.rs`
+- Handler: hide window → close Gemini Live session → close any capture process → clear in-memory conversation state → emit `clear-sensitive-data` event → `app.exit(0)` after 300ms
+- Add a `do_emergency_erase` command callable from JS too (for menu item)
 
-### Task 7.2: Gemini audio input
-- File: `src-tauri/src/ai/gemini.rs`
-- `GeminiClient::send_with_audio(text, audio_path)` — sends text + audio inline
-- Gemini's `gemini-2.0-flash` handles audio natively
+### Task 6.2: Frontend cleanup
+- File: `src/lib/store.ts`
+- Listen for `clear-sensitive-data` event, clear all in-memory state
+- File: `src/lib/router.ts`
+- Reset to MainView
 
-### Task 7.3: Frontend audio UI
-- File: `src/components/AudioBar.tsx`
-- Push-to-talk button (hold to record)
-- Waveform visualization during recording
-- "Transcribing..." spinner after release
-- Auto-sends the transcription + audio to Gemini
+### Task 6.3: Test panic flow
+- Start a session
+- Press ⌘+Shift+E
+- Verify: window hides, app quits, no data in memory
+- Relaunch: state is fresh (no leftover conversation)
 
 **Acceptance criteria:**
-- [ ] Hold mic button, speak, release → message sent
-- [ ] Waveform animates in real-time
-- [ ] Gemini transcribes and responds in < 2s
-- [ ] VAD auto-stops if user stops talking for 1s
-- [ ] Audio stored locally in captures/
+- [ ] ⌘+Shift+E hides window + quits in < 500ms
+- [ ] All AI sessions are closed
+- [ ] All in-memory state is cleared
+- [ ] SQLite history is preserved (user can review later)
+- [ ] Reopening app shows fresh state
 
 ---
 
-## 🚧 Phase 8: P0 — System Audio Capture (Meetings)
+## 🚧 Phase 7: System Audio Capture (Meetings)
 
-**Goal:** `⌘+Shift+M` captures meeting audio (Zoom, Meet, etc.) and feeds it to the AI in real-time.
+**Goal:** Capture macOS system audio, feed to Gemini Live for real-time meeting assistance.
 
-**Files:**
-- `src-tauri/src/capture/system_audio.rs` (new) — ScreenCaptureKit on macOS
-- `src-tauri/Cargo.toml` — add `screencapturekit = "0.3"` or use `cpal` with system device
+**New Rust:**
+- `src-tauri/src/capture/system_audio.rs` — screencapturekit-based
+- `src-tauri/Cargo.toml` — add `screencapturekit = "0.3"` (or `objc2` + raw ScreenCaptureKit)
 
 **Subagent tasks:**
 
-### Task 8.1: System audio capture
+### Task 7.1: System audio capture
 - File: `src-tauri/src/capture/system_audio.rs`
 - On macOS, use `screencapturekit` to capture system audio
-- Stream chunks to the AI continuously
-- Show a "listening..." indicator in the overlay
+- 100ms chunks, 24kHz PCM, mono
+- Send to Gemini Live as audio input
+- Spawn the capture as a background task
+- Stop on demand
 
-### Task 8.2: Real-time AI
-- File: `src-tauri/src/ai/gemini.rs`
-- `GeminiClient::stream_audio_chunks(stream) -> Stream<response>`
-- Gemini's Live API supports real-time audio (v0.5 — for now just buffer and send periodically)
+### Task 7.2: Wire to ⌘+Shift+M (already in hotkey list, but renamed)
+- Actually we use ⌘+M for click-through. Let me reconsider.
+- Use `⌘+Shift+A` for "audio toggle" (mic), and add `⌘+Shift+M` for system audio
+- File: `src-tauri/src/hotkeys/actions.rs` — add system audio toggle action
+
+### Task 7.3: UI indicator
+- File: `src/components/StatusBar.tsx`
+- Show "Listening to meeting..." with a different color/animation when system audio is on
 
 **Acceptance criteria:**
-- [ ] `⌘+Shift+M` starts system audio capture
-- [ ] Overlay shows a "listening" indicator
-- [ ] Gemini processes the audio and provides insights
-- [ ] Capture stops cleanly when toggled off
+- [ ] Can start system audio capture from a hotkey
+- [ ] System audio flows to Gemini Live
+- [ ] Stop cleanly on demand
+- [ ] No audio feedback / no echo
 
 ---
 
-## 🚧 Phase 9: P0 — Conversation Persistence
+## 🚧 Phase 8: Fallback Providers (Ollama + Groq)
 
-**Goal:** Conversations are searchable, organized, and persist across launches.
+**Goal:** User can switch from Gemini Live to local Ollama or cloud Groq for the responder.
 
-**Files:**
-- `src-tauri/src/db/conversations.rs` (new)
-- `src-tauri/src/db/messages.rs` (new)
-- `src/components/HistorySidebar.tsx` (new)
-- `src/components/ConversationList.tsx` (new)
+**New Rust:**
+- `src-tauri/src/ai/providers/mod.rs` — provider trait
+- `src-tauri/src/ai/providers/gemini.rs` — Gemini Flash HTTP (already there)
+- `src-tauri/src/ai/providers/groq.rs` — Groq HTTP
+- `src-tauri/src/ai/providers/ollama.rs` — Ollama HTTP
+- `src-tauri/src/ai/providers/factory.rs` — picks provider based on settings
 
 **Subagent tasks:**
 
-### Task 9.1: DB CRUD
-- Files: `src-tauri/src/db/{conversations,messages}.rs`
-- `list_conversations`, `create_conversation`, `delete_conversation`
-- `list_messages(conv_id)`, `save_message(msg)`
+### Task 8.1: Provider trait + 3 implementations
+- Each provider: `chat_stream(messages, model) -> Stream<String>`
+- All use HTTP + SSE
 
-### Task 9.2: History sidebar
-- File: `src/components/HistorySidebar.tsx`
-- List of conversations (title = first user message or generated title)
-- Click to load
+### Task 8.2: Factory + settings integration
+- File: `src-tauri/src/ai/providers/factory.rs`
+- Read `provider` + `api_key` + `ollama_host` from settings
+- Return the right provider
+
+### Task 8.3: UI in AICustomizeView
+- Provider dropdown (Gemini / Groq / Ollama)
+- API key field for selected provider
+- "Test connection" button
+
+**Acceptance criteria:**
+- [ ] User can pick provider in settings
+- [ ] Each provider works end-to-end
+- [ ] Switching providers is instant
+- [ ] Local Ollama works without internet
+
+---
+
+## 🚧 Phase 9: Conversation History + Persistence
+
+**Goal:** Conversations persist, are searchable, replayable, deletable.
+
+**New frontend:**
+- `src/routes/views/HistoryView.tsx` — list + search + click to load
+- `src/lib/conversations.ts` — typed wrappers for the conversation CRUD
+
+**Subagent tasks:**
+
+### Task 9.1: History view
+- File: `src/routes/views/HistoryView.tsx`
+- List all conversations (title = first user message, or auto-generated)
+- Search bar (filters by title + content)
+- Click to load (navigate to AssistantView with that conversation)
 - Delete with confirmation
-- Search bar
+- Show timestamp, message count, profile used
+
+### Task 9.2: Save conversation as you go
+- After each turn, save user message + assistant response to DB
+- File: `src-tauri/src/ai/router.rs` — emit `save:message` event with full message
+- File: `src/lib/store.ts` — listen and persist via `save_message` command
+
+### Task 9.3: Load conversation on demand
+- When `next_step` is pressed in MainView → start new conversation
+- When clicking a past conversation → load it
+- Assistant view shows the conversation history as the user interacts
 
 **Acceptance criteria:**
-- [ ] Conversations are saved automatically
-- [ ] Reloading the app shows previous conversations
-- [ ] User can search conversations
-- [ ] User can delete conversations
-- [ ] User can rename conversations
+- [ ] All conversations are auto-saved
+- [ ] History view lists them with search
+- [ ] Click to load works
+- [ ] Delete works
+- [ ] Cross-launch persistence verified
 
 ---
 
-## 🚧 Phase 10: P1 — Memory + Fact Extraction
+## 🚧 Phase 10: Final Ship (Signed .dmg)
 
-**Goal:** After each conversation, Gemini extracts user facts ("User prefers dark mode", "User is interviewing at Google"). These surface in the system prompt of future conversations.
-
-**Files:**
-- `src-tauri/src/memory/mod.rs` (new) — memory module
-- `src-tauri/src/memory/facts.rs` (new) — fact extraction + storage
-- `src-tauri/src/db/memory.rs` (new) — memory_facts table
-- `src/lib/MemoryInspector.tsx` (new) — dev tool: see all known facts
+**Goal:** Polished, signed, notarized, ready-to-distribute `.dmg`.
 
 **Subagent tasks:**
 
-### Task 10.1: Memory store
-- File: `src-tauri/src/memory/facts.rs`
-- `extract_facts(conversation_messages) -> Vec<Fact>` — calls Gemini to extract
-- `store_facts(facts)`, `list_facts()`, `delete_fact(id)`
+### Task 10.1: App icon
+- Generate proper 16/32/64/128/256/512/1024 PNGs + .icns
+- Replace the placeholder "C" icon
+- Sleek, recognizable, works at all sizes
 
-### Task 10.2: Inject into system prompt
-- File: `src-tauri/src/ai/router.rs`
-- Before sending to Gemini, prepend the user's known facts to the system prompt
-- Use Gemini's `cachedContent` API for efficient reuse
-
-### Task 10.3: Memory inspector
-- File: `src/routes/MemoryInspector.tsx`
-- Shows all known facts
-- User can edit/delete any
-- "This is what the AI knows about you" page
-
-**Acceptance criteria:**
-- [ ] After 5+ conversations, the AI starts referencing known facts
-- [ ] User can see, edit, and delete facts
-- [ ] "Forget everything" button clears all memory
-
----
-
-## 🚧 Phase 11: P0 — Final Ship
-
-**Goal:** Signed, notarized `.dmg` ready to distribute.
-
-**Subagent tasks:**
-
-### Task 11.1: App icon set
-- Generate proper 16/32/128/256/512/1024 PNGs + .icns
-- App icon should be slick (not the placeholder C)
-
-### Task 11.2: Code signing
+### Task 10.2: Code signing
 - Configure `tauri.conf.json` with `bundle.macOS.signingIdentity`
-- Set `APPLE_ID`, `APPLE_PASSWORD` (app-specific), `APPLE_TEAM_ID` env vars
+- User sets `APPLE_ID`, `APPLE_PASSWORD` (app-specific), `APPLE_TEAM_ID` env vars
+- `tauri build` produces signed .app
 
-### Task 11.3: Notarization
-- `tauri build` with notarization enabled
-- Verify with `spctl --assess`
+### Task 10.3: Notarization
+- Configure notarization
+- Verify with `spctl --assess --verbose=4`
+- Result: "accepted" + "notarized"
 
-### Task 11.4: Final QA
+### Task 10.4: Final QA
 - Clean install on a fresh Mac
-- All hotkeys work
-- All features work
-- No console errors
-- All prompts selectable
-- All settings persist
-- Code-signed .dmg installs without "unidentified developer" warning
+- All 11 hotkeys work
+- All 7 views accessible
+- All 6 profiles work
+- All 3 AI providers work
+- Emergency erase works
+- Stealth works (invisible in screen-share)
+- Code-signed .dmg installs without warnings
 
 **Acceptance criteria:**
-- [ ] `.dmg` opens
-- [ ] Drag-to-Applications works
-- [ ] App launches without warnings
+- [ ] `.dmg` opens, drags to /Applications, launches without warnings
 - [ ] All features work end-to-end
 - [ ] Code-signed + notarized
-- [ ] Total binary size < 30MB
+- [ ] Total DMG < 30MB
+- [ ] README is up to date
 
 ---
 
@@ -514,16 +433,14 @@
 
 | Phase | Tasks | Estimated subagent-min |
 |---|---|---|
-| 1 | 3 | 30 |
-| 2 | 4 | 40 |
-| 3 | 8 | 80 (parallel) |
-| 4 | 3 | 25 |
-| 5 | 3 | 30 |
-| 6 | 3 | 35 |
-| 7 | 3 | 35 |
-| 8 | 2 | 30 |
-| 9 | 2 | 25 |
-| 10 | 3 | 35 |
-| 11 | 4 | 40 |
-| **Total** | **38** | **~405 subagent-min** |
-| **Real time (parallel where possible)** | | **~3-4 hours wall clock** |
+| 2 | 5 | 50 |
+| 3 | 6 | 80 (some parallel) |
+| 4 | 5 | 70 (Live is complex) |
+| 5 | 3 | 35 |
+| 6 | 3 | 25 |
+| 7 | 3 | 40 |
+| 8 | 3 | 35 |
+| 9 | 3 | 30 |
+| 10 | 4 | 40 |
+| **Total** | **35** | **~405 subagent-min** |
+| **Real time (with parallel + actual build) | | **~4-6 hours wall clock** |
