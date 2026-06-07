@@ -1,5 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type {
+  DbProfile,
+  DbConversation,
+  DbMessage,
+} from "./db-types";
+
+export type {
+  DbProfile,
+  DbConversation,
+  DbMessage,
+  DbCapture,
+} from "./db-types";
 
 /**
  * Typed Tauri IPC API. Mirrors the Rust commands in src-tauri/src/.
@@ -116,3 +128,74 @@ export function onOverlayVisibilityChange(
 
 // ---------- Phase 7 (Ollama) — added later ----------
 // export async function* streamChat(...): AsyncIterable<string> { ... }
+
+// ---------- DB: Profiles ----------
+export async function listProfiles(): Promise<DbProfile[]> {
+  return invoke("list_profiles");
+}
+
+export async function getProfile(id: string): Promise<DbProfile | null> {
+  return invoke("get_profile", { id });
+}
+
+export async function createProfile(
+  name: string,
+  systemPrompt: string,
+): Promise<DbProfile> {
+  return invoke("create_profile", { name, systemPrompt });
+}
+
+export async function updateProfile(
+  id: string,
+  name: string | undefined,
+  systemPrompt: string | undefined,
+): Promise<DbProfile> {
+  return invoke("update_profile", { id, name, systemPrompt });
+}
+
+export async function deleteProfile(id: string): Promise<void> {
+  return invoke("delete_profile", { id });
+}
+
+// ---------- DB: Conversations ----------
+export async function listConversations(): Promise<DbConversation[]> {
+  return invoke("list_conversations");
+}
+
+export async function createConversation(
+  profileId: string | null,
+): Promise<DbConversation> {
+  return invoke("create_conversation", { profileId });
+}
+
+export async function updateConversationTitle(
+  id: string,
+  title: string,
+): Promise<void> {
+  return invoke("update_conversation_title", { id, title });
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  return invoke("delete_conversation", { id });
+}
+
+// ---------- DB: Messages ----------
+export async function listMessages(
+  conversationId: string,
+): Promise<DbMessage[]> {
+  return invoke("list_messages", { conversationId });
+}
+
+export async function saveMessage(args: {
+  conversationId: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  audioTranscript?: string;
+  screenshotId?: string;
+  model?: string;
+}): Promise<DbMessage> {
+  return invoke("save_message", args);
+}
+
+// ---------- DB: Captures (typed for Phase 4 — no wrapper yet) ----------
+// export async function listCaptures(): Promise<DbCapture[]> { ... }

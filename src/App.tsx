@@ -5,6 +5,7 @@ import {
   toggleOverlay as tauriToggleOverlay,
 } from "./lib/tauri";
 import { useOverlayStore } from "./lib/store";
+import { syncBuiltinProfilesToDb } from "./lib/profiles";
 import { Overlay } from "./routes/Overlay";
 import { DevPanel } from "./components/DevPanel";
 
@@ -43,6 +44,12 @@ export default function App() {
   useEffect(() => {
     loadHotkeyBindings();
   }, [loadHotkeyBindings]);
+
+  // Back-fill the 6 builtin profile system prompts into SQLite on every launch.
+  // Idempotent — only updates rows whose system_prompt is empty.
+  useEffect(() => {
+    syncBuiltinProfilesToDb();
+  }, []);
 
   // Dev-only escape hatch: dev panel in the corner of the main window
   if (import.meta.env.DEV) {
