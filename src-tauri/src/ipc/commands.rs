@@ -7,7 +7,6 @@ use tauri::AppHandle;
 use crate::error::Result;
 use crate::settings::{AppSettings, SettingsPatch, SettingsState};
 use crate::window::helpers;
-use crate::window::overlay;
 
 // ---------- Window ----------
 
