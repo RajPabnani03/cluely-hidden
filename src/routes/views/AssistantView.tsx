@@ -1,47 +1,34 @@
 /**
  * AssistantView — the live AI assistant.
  *
- * In v0.1.0 this is the old Overlay.tsx content (title bar, chat stream,
- * input bar) re-housed inside the new single-window view architecture.
- * In Phase 4 it will grow: audio recording UI, screenshot previews,
- * speaker diarization labels, and the 2-model latency status row.
- *
- * The status pill at the top mirrors cheating-daddy's "Listening… /
- * Reconnecting…" pattern. For now it shows a static "ready" state.
+ * The title bar shows the brand, a live status pill, and the message
+ * count. Window controls (click-through, hide) live in the Sidebar so we
+ * don't duplicate them here.
  */
 
 import { useEffect } from "react";
-import { Eye, MousePointer2, X } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { useOverlayStore } from "../../lib/store";
 import { useRouter } from "../../lib/router";
 import { ChatStream } from "../../components/ChatStream";
 import { InputBar } from "../../components/InputBar";
-import {
-  hideOverlay,
-  onShortcutTriggered,
-  setClickThrough as tauriSetClickThrough,
-} from "../../lib/tauri";
+import { onShortcutTriggered } from "../../lib/tauri";
 import { cn } from "../../lib/utils";
 
 type AssistantStatus = "ready" | "listening" | "reconnecting" | "error";
 
 export function AssistantView() {
-  const clickThrough = useOverlayStore((s) => s.clickThrough);
-  const setClickThrough = useOverlayStore((s) => s.setClickThrough);
   const messages = useOverlayStore((s) => s.messages);
   const streaming = useOverlayStore((s) => s.streaming);
   const clearMessages = useOverlayStore((s) => s.clearMessages);
   const setView = useRouter((s) => s.setView);
 
-  // Listen for "next_step" — in Phase 4 this will trigger a screenshot
-  // capture. For now it just focuses the input bar (no-op since we don't
-  // have a ref, but the subscription is wired correctly).
+  // Listen for "next_step" — in a future release this will trigger a
+  // screenshot capture. For now it just switches to the assistant view.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     onShortcutTriggered((action) => {
       if (action === "next_step") {
-        // Phase 4 will: captureScreenshot() → append user msg → chat()
-        // For v0.1, just make sure we're on the assistant view.
         setView("assistant");
       }
     })
@@ -67,7 +54,7 @@ export function AssistantView() {
         data-tauri-drag-region
       >
         <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <Eye className="w-3.5 h-3.5" />
+          <MessageSquare className="w-3.5 h-3.5" />
           <span className="font-medium text-zinc-200">Cluely</span>
           <span className="opacity-50">·</span>
           <StatusPill status={status} />
@@ -88,41 +75,6 @@ export function AssistantView() {
               Clear
             </button>
           )}
-          <button
-            onClick={async () => {
-              const next = !clickThrough;
-              setClickThrough(next);
-              try {
-                await tauriSetClickThrough(next);
-              } catch (err) {
-                console.error("setClickThrough failed:", err);
-              }
-            }}
-            className={cn(
-              "p-1.5 rounded-md transition-colors",
-              clickThrough
-                ? "bg-blue-600/20 text-blue-400"
-                : "hover:bg-zinc-800 text-zinc-400",
-            )}
-            title={
-              clickThrough
-                ? "Click-through ON — overlay ignores clicks"
-                : "Click-through OFF — overlay captures clicks"
-            }
-          >
-            {clickThrough ? (
-              <Eye className="w-3.5 h-3.5" />
-            ) : (
-              <MousePointer2 className="w-3.5 h-3.5" />
-            )}
-          </button>
-          <button
-            onClick={() => hideOverlay().catch(console.error)}
-            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-400 transition-colors"
-            title="Hide overlay (⌘+\\)"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
 

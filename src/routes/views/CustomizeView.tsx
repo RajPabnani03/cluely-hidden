@@ -81,7 +81,8 @@ export function CustomizeView() {
           onChange={(v) => apply({ theme: v as AppSettings["theme"] })}
         />
         <p className="text-[11px] text-zinc-500 mt-2">
-          For v0.1.0 only the dark theme is fully styled. Light/system land in Phase 4.
+          For now only the dark theme is fully styled. Light/system themes are
+          not yet wired.
         </p>
       </Section>
 
@@ -92,7 +93,7 @@ export function CustomizeView() {
           onChange={(v) => setFontSize(v as "small" | "medium" | "large")}
         />
         <p className="text-[11px] text-zinc-500 mt-2">
-          UI scaling is preview-only in v0.1.0; persisted in Phase 4.
+          UI scaling is preview-only; persistence not yet wired.
         </p>
       </Section>
 
@@ -114,8 +115,8 @@ export function CustomizeView() {
           ))}
         </div>
         <p className="text-[11px] text-zinc-500 mt-2">
-          Visual preview only. Real overlay alpha is set via the Rust
-          `set_window_alpha` command in Phase 4.
+          Visual preview only. Real overlay alpha must be set on the Rust
+          window at runtime — not yet exposed.
         </p>
       </Section>
 
@@ -126,8 +127,8 @@ export function CustomizeView() {
           </kbd>
         </Row>
         <p className="text-[11px] text-zinc-500 mt-2">
-          To rebind, edit your Tauri config or wait for the in-app rebinder
-          (Phase 4). All 11 hotkeys are shown in Help.
+          To rebind, edit src-tauri/tauri.conf.json and restart the app.
+          In-app rebinding is not yet wired.
         </p>
       </Section>
     </div>

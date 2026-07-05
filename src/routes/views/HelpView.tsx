@@ -109,9 +109,8 @@ export function HelpView() {
       </Section>
 
       <footer className="pt-4 border-t border-zinc-800 text-[11px] text-zinc-500 flex items-center justify-between">
-        <span>Cluely Hidden v0.1.0</span>
+        <span>Cluely Hidden v0.3.0</span>
         <span>
-          Phase 3C ·{" "}
           <a
             href="https://github.com/rajpabnani/cluely-hidden"
             target="_blank"

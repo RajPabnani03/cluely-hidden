@@ -95,23 +95,11 @@ export default function App() {
     help: HelpView,
   }[currentView];
 
-  // Dev escape hatch: a small panel so the dev can toggle the overlay
-  // without leaving the page. In production this is unused.
-  if (import.meta.env.DEV) {
-    return (
-      <>
-        <div className="flex h-screen w-screen bg-zinc-900 text-zinc-100">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            <View />
-          </main>
-        </div>
-        <div className="fixed bottom-4 right-4 w-72 z-50">
-          <DevPanel />
-        </div>
-      </>
-    );
-  }
+  /**
+   * Dev escape hatch: a small panel so the dev can toggle the overlay
+   * without leaving the page. In production this is unused.
+   */
+  const isDev = import.meta.env.DEV;
 
   return (
     <div className="flex h-screen w-screen bg-zinc-900 text-zinc-100">
@@ -119,6 +107,11 @@ export default function App() {
       <main className="flex-1 overflow-auto">
         <View />
       </main>
+      {isDev && (
+        <div className="fixed bottom-4 right-4 w-72 z-50">
+          <DevPanel />
+        </div>
+      )}
     </div>
   );
 }

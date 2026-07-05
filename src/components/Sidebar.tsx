@@ -1,6 +1,17 @@
 import { useRouter, type ViewId, VIEW_LABELS, ALL_VIEWS } from "../lib/router";
 import { useOverlayStore } from "../lib/store";
-import { Eye, MousePointer2, X } from "lucide-react";
+import {
+  MessageSquare,
+  Home,
+  Sparkles,
+  Palette,
+  Bot,
+  History,
+  HelpCircle,
+  Eye,
+  MousePointer2,
+  X,
+} from "lucide-react";
 import { hideOverlay, setClickThrough as tauriSetClickThrough } from "../lib/tauri";
 import { cn } from "../lib/utils";
 
@@ -32,7 +43,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-[60px] shrink-0 h-full flex flex-col items-center justify-between bg-zinc-950/80 border-r border-zinc-800 py-3">
-      {/* Top: 7 nav icons */}
+      {/* Top: nav icons */}
       <nav className="flex flex-col items-center gap-1 w-full px-2">
         {visibleViews.map((view) => (
           <NavButton
@@ -84,7 +95,7 @@ export function Sidebar() {
           </button>
         </div>
         <div className="text-[9px] text-zinc-500 font-mono tracking-tight text-center leading-tight">
-          v0.1.0
+          v0.3.0
         </div>
       </div>
     </aside>
@@ -98,6 +109,7 @@ interface NavButtonProps {
 }
 
 function NavButton({ view, active, onClick }: NavButtonProps) {
+  const Icon = NAV_ICONS[view];
   return (
     <button
       onClick={onClick}
@@ -105,33 +117,23 @@ function NavButton({ view, active, onClick }: NavButtonProps) {
       aria-label={VIEW_LABELS[view]}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "w-10 h-10 flex items-center justify-center rounded-md transition-colors text-lg",
+        "w-10 h-10 flex items-center justify-center rounded-md transition-colors",
         active
           ? "bg-blue-600 text-white shadow-sm"
           : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100",
       )}
     >
-      <NavIcon view={view} />
+      <Icon className="w-[18px] h-[18px]" />
     </button>
   );
 }
 
-/** Glyph per view. Using simple unicode to avoid an icon-library dep here. */
-function NavIcon({ view }: { view: ViewId }) {
-  switch (view) {
-    case "assistant":
-      return <span aria-hidden>💬</span>;
-    case "main":
-      return <span aria-hidden>🏠</span>;
-    case "onboarding":
-      return <span aria-hidden>👋</span>;
-    case "customize":
-      return <span aria-hidden>🎨</span>;
-    case "ai-customize":
-      return <span aria-hidden>🤖</span>;
-    case "history":
-      return <span aria-hidden>📜</span>;
-    case "help":
-      return <span aria-hidden>❓</span>;
-  }
-}
+const NAV_ICONS: Record<ViewId, React.ComponentType<{ className?: string }>> = {
+  assistant: MessageSquare,
+  main: Home,
+  onboarding: Sparkles,
+  customize: Palette,
+  "ai-customize": Bot,
+  history: History,
+  help: HelpCircle,
+};

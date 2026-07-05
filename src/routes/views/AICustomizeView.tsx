@@ -279,7 +279,7 @@ export function AICustomizeView() {
           ))}
         </div>
         <p className="text-[11px] text-zinc-500 mt-2">
-          Hardcoded list in v0.1.0; will read from a Rust registry in Phase 4.
+          Hardcoded list; provider model registry not yet wired.
         </p>
       </Section>
 
@@ -291,9 +291,9 @@ export function AICustomizeView() {
           onChange={onToggleGoogleSearch}
         />
         <p className="text-[11px] text-zinc-500 mt-2">
-          Stored as a prefix on settings.model in v0.1.0; dedicated
+          Stored as a prefix on settings.model. A dedicated
           {` ${GOOGLE_SEARCH_KEY} `}
-          setting lands in Phase 4.
+          setting is not yet wired.
         </p>
       </Section>
 

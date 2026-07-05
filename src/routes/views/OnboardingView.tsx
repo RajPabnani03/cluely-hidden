@@ -23,8 +23,6 @@ const STEP_COUNT = 4;
 export function OnboardingView() {
   const setOnboarded = useRouter((s) => s.setOnboarded);
   const setView = useRouter((s) => s.setView);
-  const setProfile = useRouter; // unused alias, kept for parity with plan
-  void setProfile;
   const hotkeyBindings = useOverlayStore((s) => s.hotkeyBindings);
   const [step, setStep] = useState(0);
   const [pickedProfile, setPickedProfile] = useState<ProfileId>("interview");
