@@ -1,16 +1,14 @@
 /**
- * HelpView — keyboard shortcuts + FAQ + version footer.
- *
- * Pulls the live hotkey bindings from the store so the user always sees
- * the actual current bindings (after any rebind). The 11 hotkeys are
- * rendered in a fixed order matching the OnboardingView's hotkeys step.
+ * HelpView — secondary overlay sheet with hotkeys + FAQ.
  */
-
+import { X } from "lucide-react";
+import { useRouter } from "../../lib/router";
 import { useOverlayStore } from "../../lib/store";
+import { cn } from "../../lib/utils";
 
 const HOTKEY_INFO: Array<{ action: string; label: string; description: string }> = [
   { action: "toggle_visibility", label: "Toggle overlay", description: "Show or hide the overlay window from anywhere." },
-  { action: "next_step", label: "Next step", description: "Take a screenshot (or start a session if none active)." },
+  { action: "next_step", label: "Assist", description: "Take a screenshot or trigger the active assistant mode." },
   { action: "emergency_erase", label: "Emergency erase", description: "Wipe in-memory state and hide the overlay. Use in panic." },
   { action: "toggle_click_through", label: "Toggle click-through", description: "Let clicks pass through the overlay to apps below." },
   { action: "move_up", label: "Move up", description: "Nudge the overlay window up." },
@@ -30,23 +28,24 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "Where is my data stored?",
-    a: "Locally in a SQLite database inside the Tauri app data directory. Nothing leaves your machine unless you enable Google Search (in which case queries go to Google).",
+    a: "Locally in a SQLite database inside the Tauri app data directory. Nothing leaves your machine unless you enable Google Search.",
   },
   {
     q: "Can I rebind hotkeys?",
-    a: "In-app rebinding lands in Phase 4. For now, edit src-tauri/tauri.conf.json and restart the app.",
+    a: "In-app rebinding is not yet wired. Edit src-tauri/tauri.conf.json and restart the app.",
   },
   {
     q: "Which AI providers are supported?",
-    a: "Google Gemini (gemini-2.5-flash, gemini-2.5-pro) in v0.1.0. Ollama and local model support land in Phase 7.",
+    a: "Google Gemini (gemini-2.5-flash, gemini-2.5-pro). Ollama and local model support is planned.",
   },
   {
     q: "What if someone walks up to my screen?",
-    a: "Hit ⌘+Shift+E (Cmd+Shift+E) immediately. The overlay hides, the AI session ends, and in-memory state is cleared.",
+    a: "Hit ⌘+Shift+E immediately. The overlay hides, the session clears, and in-memory state is wiped.",
   },
 ];
 
 export function HelpView() {
+  const back = useRouter((s) => s.backToAssistant);
   const hotkeyBindings = useOverlayStore((s) => s.hotkeyBindings);
   const map: Record<string, string> = {};
   for (const [action, key] of hotkeyBindings) {
@@ -54,81 +53,77 @@ export function HelpView() {
   }
 
   return (
-    <div className="h-full overflow-auto p-6 space-y-6 max-w-2xl mx-auto w-full">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Help</h1>
-        <p className="text-sm text-zinc-400">
-          Hotkeys, FAQ, and feedback.
-        </p>
-      </header>
-
-      <Section title="Hotkeys">
-        <ul className="divide-y divide-zinc-800 -mx-1">
-          {HOTKEY_INFO.map((h) => (
-            <li
-              key={h.action}
-              className="flex items-start justify-between gap-4 px-1 py-2.5"
-            >
-              <div className="min-w-0">
-                <div className="text-sm text-zinc-200">{h.label}</div>
-                <div className="text-[11px] text-zinc-500 mt-0.5">
-                  {h.description}
-                </div>
-              </div>
-              <kbd className="shrink-0 font-mono text-xs bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-200 self-center">
-                {map[h.action] ?? "—"}
-              </kbd>
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      <Section title="FAQ">
-        <dl className="space-y-3">
-          {FAQ.map((item) => (
-            <div key={item.q}>
-              <dt className="text-sm font-medium text-zinc-200">{item.q}</dt>
-              <dd className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                {item.a}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </Section>
-
-      <Section title="Feedback">
-        <p className="text-sm text-zinc-300">
-          Found a bug? Want a feature? Drop us a line.
-        </p>
-        <a
-          href="mailto:hello@cluely-hidden.local?subject=Cluely%20Hidden%20Feedback"
-          className="inline-block mt-2 text-sm text-blue-400 hover:text-blue-300 underline"
-        >
-          hello@cluely-hidden.local →
-        </a>
-      </Section>
-
-      <footer className="pt-4 border-t border-zinc-800 text-[11px] text-zinc-500 flex items-center justify-between">
-        <span>Cluely Hidden v0.3.0</span>
-        <span>
-          <a
-            href="https://github.com/rajpabnani/cluely-hidden"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-zinc-300"
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+      <div
+        className={cn(
+          "w-full max-w-[420px] max-h-[85vh] flex flex-col rounded-[20px] overflow-hidden",
+          "bg-zinc-900/95 backdrop-blur-xl border border-white/[0.08] shadow-2xl"
+        )}
+      >
+        <header className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+          <h2 className="text-sm font-semibold text-zinc-100">Help</h2>
+          <button
+            onClick={back}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
           >
-            View source
-          </a>
-        </span>
-      </footer>
+            <X className="w-4 h-4" />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-auto p-4 space-y-5">
+          <Section title="Hotkeys">
+            <ul className="space-y-2">
+              {HOTKEY_INFO.map((h) => (
+                <li
+                  key={h.action}
+                  className="flex items-start justify-between gap-4 text-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="text-zinc-200">{h.label}</div>
+                    <div className="text-[11px] text-zinc-500">{h.description}</div>
+                  </div>
+                  <kbd className="shrink-0 font-mono text-[10px] bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-zinc-300 self-center">
+                    {map[h.action] ?? "—"}
+                  </kbd>
+                </li>
+              ))}
+            </ul>
+          </Section>
+
+          <Section title="FAQ">
+            <dl className="space-y-3">
+              {FAQ.map((item) => (
+                <div key={item.q}>
+                  <dt className="text-sm font-medium text-zinc-200">{item.q}</dt>
+                  <dd className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                    {item.a}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Section>
+
+          <footer className="pt-3 border-t border-zinc-800 text-[10px] text-zinc-500 flex items-center justify-between">
+            <span>Cluely Hidden v0.3.0</span>
+            <a
+              href="https://github.com/rajpabnani/cluely-hidden"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-zinc-300"
+            >
+              View source
+            </a>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-2">
-      <h2 className="text-sm font-medium text-zinc-200">{title}</h2>
+    <section className="space-y-2">
+      <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wide">{title}</h3>
       {children}
     </section>
   );

@@ -4,6 +4,7 @@ import {
   type HotkeyBindings,
   type HotkeyActionId,
   getHotkeyBindings,
+  updateConversationTitle,
 } from "./tauri";
 
 interface OverlayState {
@@ -19,6 +20,7 @@ interface OverlayState {
   setClickThrough: (enabled: boolean) => void;
   setStreaming: (streaming: boolean) => void;
   setConversationId: (id: string | null) => void;
+  setConversationTitle: (title: string) => Promise<void>;
   appendMessage: (msg: ChatMessage) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;
@@ -27,7 +29,7 @@ interface OverlayState {
   resetSensitiveState: () => void;
 }
 
-export const useOverlayStore = create<OverlayState>((set) => ({
+export const useOverlayStore = create<OverlayState>((set, get) => ({
   visible: false,
   clickThrough: false,
   streaming: false,
@@ -40,6 +42,15 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   setClickThrough: (enabled) => set({ clickThrough: enabled }),
   setStreaming: (streaming) => set({ streaming }),
   setConversationId: (id) => set({ currentConversationId: id }),
+  setConversationTitle: async (title) => {
+    const { currentConversationId } = get();
+    if (!currentConversationId) return;
+    try {
+      await updateConversationTitle(currentConversationId, title);
+    } catch (err) {
+      console.error("setConversationTitle failed:", err);
+    }
+  },
   appendMessage: (msg) =>
     set((s) => ({ messages: [...s.messages, msg] })),
   updateLastMessage: (content) =>

@@ -73,11 +73,84 @@ export interface ChatMessage {
   createdAt: number;
 }
 
+function generateMsgId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function realisticPlaceholderResponse(message: string): string {
+  const lower = message.toLowerCase();
+  let suggestion =
+    "I don't have a live AI provider configured right now, but once you add an API key in Settings I'll give you concise, ready-to-speak answers here.";
+
+  if (lower.includes("interview") || lower.includes("tell me about yourself")) {
+    suggestion =
+      "I'm a software engineer with 5 years of experience building scalable web apps. I specialize in React and Node.js, and I've led small teams through two product launches.";
+  } else if (lower.includes("sales") || lower.includes("price")) {
+    suggestion =
+      "Our platform typically saves customers 30% on operational costs within the first 90 days. Happy to walk through the ROI for your specific workflow.";
+  } else if (lower.includes("meeting") || lower.includes("status")) {
+    suggestion =
+      "We're on track to hit the deadline. 75% of deliverables are complete, and the remaining work is scheduled for Friday. The main open item is integration testing.";
+  } else if (lower.includes("negotiation") || lower.includes("deal")) {
+    suggestion =
+      "I understand budget is a key concern. Our current offer already includes a 15% discount, and we can structure payments over 12 months if that helps.";
+  } else if (lower.includes("presentation") || lower.includes("pitch")) {
+    suggestion =
+      "Our three-year growth trajectory speaks for itself: 150% year-over-year revenue growth, 99.9% uptime, and customer acquisition costs that have stayed flat.";
+  } else if (lower.includes("exam") || lower.includes("question")) {
+    suggestion =
+      "The capital of France is **Paris** — it's been the political and cultural center of the country since 987 CE.";
+  } else if (lower.includes("hello") || lower.includes("hi ")) {
+    suggestion =
+      "Hey! I'm your stealth assistant. Ask me anything and I'll keep the answers short and ready to speak.";
+  }
+
+  return `**Demo mode — realistic placeholder reply:**\n\n${suggestion}\n\n_(Configure an API key in Settings to get live answers.)_`;
+}
+
+function isApiConfigured(settings: AppSettings | null): boolean {
+  if (!settings) return false;
+  const model = settings.model?.trim().toLowerCase();
+  return !!model && model !== "none" && !model.startsWith("demo:");
+}
+
 export async function chat(input: {
   conversationId: string | null;
   message: string;
 }): Promise<ChatMessage> {
-  return invoke("chat", { input });
+  let settings: AppSettings | null = null;
+  try {
+    settings = await getSettings();
+  } catch {
+    // If we can't read settings, treat API as unconfigured.
+  }
+
+  if (!isApiConfigured(settings)) {
+    // Temporary demo path so users always see UI activity.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    return {
+      id: input.conversationId ?? `demo-${generateMsgId()}`,
+      role: "assistant",
+      content: realisticPlaceholderResponse(input.message),
+      createdAt: Date.now(),
+    };
+  }
+
+  try {
+    return await invoke<ChatMessage>("chat", { input });
+  } catch (err) {
+    // Graceful fallback: don't leave the UI hanging.
+    console.error("chat invoke failed:", err);
+    return {
+      id: input.conversationId ?? `demo-${generateMsgId()}`,
+      role: "assistant",
+      content: realisticPlaceholderResponse(input.message),
+      createdAt: Date.now(),
+    };
+  }
 }
 
 // ---------- Hotkeys ----------

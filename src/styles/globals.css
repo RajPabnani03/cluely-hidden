@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -53,9 +55,28 @@
   * {
     @apply border-border;
   }
+
+  html {
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /*
+    The overlay is always dark and semi-transparent so the underlying screen
+    remains partially visible (glassmorphism). The "dark" class is applied on
+    the root element in the HTML entry files.
+  */
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-zinc-950/80 text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  }
+
+  /*
+    Base glass surface used throughout the overlay. Keeps content readable
+    while preserving the see-through effect that makes Cluely feel integrated
+    with the user's screen.
+  */
+  .glass {
+    @apply bg-zinc-900/95 backdrop-blur-xl border border-white/[0.08];
   }
 
   /* Tauri-specific: make the webview draggable from the top edge */
@@ -68,9 +89,6 @@
 }
 
 @layer utilities {
-  .glass {
-    @apply bg-background/60 backdrop-blur-xl border border-white/5;
-  }
   .scrollbar-thin {
     scrollbar-width: thin;
   }

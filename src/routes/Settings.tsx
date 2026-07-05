@@ -1,11 +1,18 @@
 /**
- * Re-export of AICustomizeView. Kept so `src/settings.tsx` (the separate
- * settings window entry point) still resolves its `Settings` import.
+ * Standalone settings window — deprecated.
  *
- * The original Settings.tsx (theme/model/capture/system sections) has
- * been split into `CustomizeView.tsx` (appearance) and `AICustomizeView.tsx`
- * (AI behavior + profiles) inside the new single-window view architecture
- * introduced in Phase 3C.
+ * Settings have moved into the main overlay as a sheet. This page remains
+ * only because the Rust settings window still points to settings.html.
  */
-
-export { AICustomizeView as Settings } from "./views/AICustomizeView";
+export function Settings() {
+  return (
+    <div className="h-screen w-screen flex items-center justify-center bg-zinc-950 text-zinc-100 p-6 text-center">
+      <div className="max-w-sm space-y-3">
+        <h1 className="text-lg font-semibold">Settings moved</h1>
+        <p className="text-sm text-zinc-400">
+          Open the Cluely overlay and click the ··· menu in the assistant card.
+        </p>
+      </div>
+    </div>
+  );
+}
