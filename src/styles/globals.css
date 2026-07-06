@@ -99,4 +99,36 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     @apply bg-muted-foreground/20 rounded-full;
   }
+
+  @keyframes stream-caret-blink {
+    0%,
+    45% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0.15;
+    }
+  }
+
+  .animate-stream-caret {
+    animation: stream-caret-blink 1.05s ease-in-out infinite;
+  }
+
+  @keyframes typing-dot-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.35;
+    }
+    30% {
+      transform: translateY(-3px);
+      opacity: 1;
+    }
+  }
+
+  .animate-typing-dot {
+    animation: typing-dot-bounce 1.2s ease-in-out infinite;
+  }
 }

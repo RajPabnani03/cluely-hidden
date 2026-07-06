@@ -29,6 +29,8 @@ interface OverlayState {
   setConversationTitle: (title: string) => Promise<void>;
   appendMessage: (msg: ChatMessage) => void;
   updateLastMessage: (content: string) => void;
+  /** Append a delta to the last assistant message (Gemini Live / streaming). */
+  appendAssistantStreamChunk: (chunk: string) => void;
   clearMessages: () => void;
   setHotkeyBindings: (b: HotkeyBindings) => void;
   loadHotkeyBindings: () => Promise<void>;
@@ -68,6 +70,28 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
         content,
       };
       return { messages: next };
+    }),
+  appendAssistantStreamChunk: (chunk) =>
+    set((s) => {
+      if (!chunk) return s;
+      const id = () =>
+        `live-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const next = [...s.messages];
+      const last = next[next.length - 1];
+      if (last?.role === "assistant") {
+        next[next.length - 1] = {
+          ...last,
+          content: last.content + chunk,
+        };
+      } else {
+        next.push({
+          id: id(),
+          role: "assistant",
+          content: chunk,
+          createdAt: Date.now(),
+        });
+      }
+      return { messages: next, streaming: true };
     }),
   clearMessages: () => set({ messages: [] }),
   setHotkeyBindings: (b) => set({ hotkeyBindings: b }),

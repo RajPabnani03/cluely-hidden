@@ -56,16 +56,15 @@ import { cn } from "../../lib/utils";
 type HeaderStatus = "ready" | "listening" | "thinking";
 type LiveStatus = "idle" | "ready" | "reconnecting" | "error";
 
-interface ResponseChunk {
-  id: string;
-  text: string;
-  at: number;
-}
 
 export function AssistantView() {
   const messages = useOverlayStore((s) => s.messages);
   const streaming = useOverlayStore((s) => s.streaming);
   const clearMessages = useOverlayStore((s) => s.clearMessages);
+  const setStreaming = useOverlayStore((s) => s.setStreaming);
+  const appendAssistantStreamChunk = useOverlayStore(
+    (s) => s.appendAssistantStreamChunk,
+  );
   const setView = useRouter((s) => s.setView);
 
   const [activeChip, setActiveChip] = useState<QuickAction>("assist");
@@ -75,7 +74,6 @@ export function AssistantView() {
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [transcript, setTranscript] = useState<string>("");
-  const [responseChunks, setResponseChunks] = useState<ResponseChunk[]>([]);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -145,19 +143,12 @@ export function AssistantView() {
       }),
     );
 
-    // ai:response:text — streamed response text chunks.
+    // ai:response:text — streamed response text chunks → main card.
     safe(
       listen<string>("ai:response:text", (e) => {
         const chunk = e.payload ?? "";
         if (typeof chunk === "string" && chunk.length > 0) {
-          setResponseChunks((prev) => {
-            const next: ResponseChunk = {
-              id: `rc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              text: chunk,
-              at: Date.now(),
-            };
-            return [next, ...prev].slice(0, 3);
-          });
+          appendAssistantStreamChunk(chunk);
         }
       }),
     );
@@ -176,6 +167,7 @@ export function AssistantView() {
     safe(
       listen("ai:turn:complete", () => {
         setStatusMessage("turn complete");
+        setStreaming(false);
       }),
     );
 
@@ -227,7 +219,7 @@ export function AssistantView() {
       }
       unlistenRef.current = [];
     };
-  }, []);
+  }, [appendAssistantStreamChunk, setStreaming]);
 
   // ---- Phase 4: Action handlers ----
 
@@ -245,7 +237,7 @@ export function AssistantView() {
       setSessionActive(true);
       setLiveStatus("reconnecting"); // backend hasn't confirmed yet; this flips to "ready" on ai:status
       setTranscript("");
-      setResponseChunks([]);
+      setStreaming(false);
     } catch (err) {
       console.error("aiStartLive failed:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -323,9 +315,11 @@ export function AssistantView() {
 
   const status: HeaderStatus = streaming
     ? "thinking"
-    : messages.length === 0
-      ? "ready"
-      : "listening";
+    : sessionActive
+      ? "listening"
+      : messages.length === 0
+        ? "ready"
+        : "listening";
 
   const stopEverything = () => {
     clearMessages();
@@ -540,24 +534,6 @@ export function AssistantView() {
                 <p className="text-[11.5px] text-zinc-200 whitespace-pre-wrap break-words leading-relaxed">
                   {transcript}
                 </p>
-              </div>
-            )}
-
-            {responseChunks.length > 0 && (
-              <div className="rounded-md border border-white/[0.06] bg-zinc-950/60 px-2 py-1.5">
-                <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-0.5">
-                  Last response chunks
-                </div>
-                <ul className="space-y-1">
-                  {responseChunks.map((c) => (
-                    <li
-                      key={c.id}
-                      className="text-[11.5px] text-zinc-200 leading-relaxed"
-                    >
-                      {c.text}
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
           </div>

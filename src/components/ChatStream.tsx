@@ -1,30 +1,37 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useOverlayStore } from "../lib/store";
 import { cn } from "../lib/utils";
 import type { QuickAction } from "./QuickActionChips";
+import { TypingIndicator } from "./TypingIndicator";
+import { StreamingCursor } from "./StreamingCursor";
 
 interface ChatStreamProps {
   mode: QuickAction;
 }
 
 /**
- * ChatStream — renders the response inside the Cluely-style card.
- *
- * Empty state adapts to the active mode. Messages are rendered as a single
- * consolidated assistant response (no bubbly iMessage style).
+ * ChatStream — primary response area (Cluely-style consolidated text).
  */
 export function ChatStream({ mode }: ChatStreamProps) {
   const messages = useOverlayStore((s) => s.messages);
   const streaming = useOverlayStore((s) => s.streaming);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const lastAssistantContent = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return messages[i].content;
+    }
+    return "";
+  }, [messages]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [messages.length, streaming]);
+  }, [messages.length, lastAssistantContent.length, streaming]);
 
   const empty = messages.length === 0;
+  const showLiveEmptyTyping = streaming && messages.length === 0;
 
-  if (empty) {
+  if (empty && !streaming) {
     const title =
       mode === "assist"
         ? "What do you want me to check?"
@@ -50,25 +57,45 @@ export function ChatStream({ mode }: ChatStreamProps) {
     );
   }
 
+  if (showLiveEmptyTyping) {
+    return (
+      <div className="flex items-center min-h-[160px] px-1 py-3">
+        <TypingIndicator />
+      </div>
+    );
+  }
+
   return (
     <div className="px-1 py-3 space-y-4 min-h-[160px] max-h-[380px] overflow-y-auto scrollbar-thin">
-      {messages.map((m) => {
+      {messages.map((m, index) => {
         const isUser = m.role === "user";
+        const isLast = index === messages.length - 1;
+        const isStreamingAssistant =
+          !isUser && isLast && streaming && m.role === "assistant";
+        const showCaret =
+          isStreamingAssistant && m.content.length > 0;
+        const showDots =
+          isStreamingAssistant && m.content.length === 0;
+
         return (
           <div
             key={m.id}
             className={cn(
-              "text-[13px] leading-relaxed whitespace-pre-wrap",
+              "text-[13px] leading-relaxed whitespace-pre-wrap transition-opacity duration-150",
               isUser ? "text-zinc-400" : "text-zinc-100",
             )}
           >
             {m.content}
+            {showCaret && <StreamingCursor />}
+            {showDots && <TypingIndicator className="inline-flex ml-0.5" />}
           </div>
         );
       })}
-      {streaming && (
-        <span className="inline-block w-1.5 h-4 ml-0.5 align-text-bottom bg-zinc-400 animate-pulse" />
-      )}
+      {streaming &&
+        messages.length > 0 &&
+        messages[messages.length - 1].role !== "assistant" && (
+          <TypingIndicator />
+        )}
       <div ref={bottomRef} />
     </div>
   );
