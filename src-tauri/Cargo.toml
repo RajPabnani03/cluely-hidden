@@ -40,6 +40,9 @@ xcap = "0.4"
 image = { version = "0.25", features = ["png"] }
 dirs = "5"
 
+# Phase 6 — Microphone capture pipeline
+cpal = "0.15"
+
 [features]
 # This feature is used for production builds or when `devUrl` points to the filesystem
 # DO NOT REMOVE!!

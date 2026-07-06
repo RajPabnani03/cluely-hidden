@@ -2,6 +2,8 @@
 //! via `invoke('name', args)`. Keep them thin — delegate to the appropriate
 //! module.
 
+use std::sync::Arc;
+
 use tauri::{AppHandle, Emitter};
 
 use crate::db::DbState;
@@ -302,15 +304,41 @@ pub async fn ai_send_audio(
         .decode(pcm_base64.as_bytes())
         .map_err(|e| format!("invalid base64 payload: {e}"))?;
 
-    // Clone the client (it's Arc-backed internally so this is cheap)
-    // out of the mutex before awaiting. The client itself is Clone
-    // because all its fields are.
+    // Pull an Arc<AiState> clone out of the Tauri State so we can
+    // pass it across an `.await` (the Tauri `State` itself isn't
+    // Send/Sync-friendly across awaits — it borrows the runtime
+    // internal lock).
+    let ai_handle = Arc::new(AiState(std::sync::Mutex::new(
+        state.0.lock().expect("ai mutex poisoned").clone(),
+    )));
+    ai_send_audio_impl(ai_handle, bytes).await
+}
+
+/// Inner implementation of `ai_send_audio` that takes raw PCM bytes
+/// plus an `Arc<AiState>` clone. Used by both the IPC command
+/// (above) and the microphone drain task in `crate::audio::mic`.
+///
+/// We hold the *full* client in `Arc<AiState>` (rather than just an
+/// `Option<GeminiLiveClient>`) because `GeminiLiveClient` is `Clone`
+/// (Arc-backed internally) and we need to call its async
+/// `send_audio_chunk` from the drain task — which can't borrow a
+/// `tauri::State<'_, _>` across the `.await`.
+pub async fn ai_send_audio_impl(
+    ai_state: Arc<AiState>,
+    bytes: Vec<u8>,
+) -> std::result::Result<(), String> {
+    // Clone the client out of the mutex before awaiting.
     let client = {
-        let guard = state.0.lock().expect("ai mutex poisoned");
-        guard
-            .as_ref()
-            .ok_or_else(|| "ai session not started".to_string())?
-            .clone()
+        let guard = ai_state.0.lock().expect("ai mutex poisoned");
+        match guard.as_ref() {
+            Some(c) => c.clone(),
+            None => {
+                // No active AI session — silently drop the chunk.
+                // This is normal when capture is started before
+                // `ai_start_live` or after `ai_stop_live`.
+                return Ok(());
+            }
+        }
     };
 
     client
@@ -373,4 +401,62 @@ pub async fn capture_screen(
 
     log::info!("capture_screen complete: id={} path={}", meta.id, meta.path.display());
     Ok(meta)
+}
+
+// ---- Phase 6 — Microphone capture pipeline ----
+//
+// `mic_start` opens the default input device, builds a cpal stream,
+// resamples to 24 kHz / mono s16le, and forwards 100 ms chunks into
+// the active Gemini Live session (if any). `mic_stop` drops the
+// capture handle, which tears down the cpal stream and the drain
+// task.
+//
+// The handle lives in `MicState(Mutex<Option<MicCapture>>)` so the
+// frontend can start/stop capture multiple times per app lifetime.
+
+use crate::audio::mic::{start_capture, MicCapture};
+
+/// Shared handle for an active microphone capture session.
+/// `None` when capture is idle.
+pub struct MicState(pub std::sync::Mutex<Option<MicCapture>>);
+
+impl Default for MicState {
+    fn default() -> Self {
+        MicState(std::sync::Mutex::new(None))
+    }
+}
+
+/// Open the default input device and start streaming into the active
+/// Gemini Live session (no-op if the session isn't open yet).
+///
+/// Safe to call when capture is already active — the new handle
+/// replaces the old one (the old cpal stream is dropped and stops).
+#[tauri::command]
+pub async fn mic_start(
+    app: AppHandle,
+    state: tauri::State<'_, MicState>,
+) -> std::result::Result<(), String> {
+    let capture = start_capture(app.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Replace any existing handle. Dropping the previous one stops
+    // the previous cpal stream.
+    let mut guard = state.0.lock().expect("mic mutex poisoned");
+    *guard = Some(capture);
+
+    log::info!("mic_start: capture handle installed");
+    Ok(())
+}
+
+/// Stop the active capture (if any). Dropping the handle tears down
+/// the cpal stream and the drain task.
+#[tauri::command]
+pub async fn mic_stop(
+    state: tauri::State<'_, MicState>,
+) -> std::result::Result<(), String> {
+    let mut guard = state.0.lock().expect("mic mutex poisoned");
+    *guard = None; // drop MicCapture → stream stops
+    log::info!("mic_stop: capture handle dropped");
+    Ok(())
 }

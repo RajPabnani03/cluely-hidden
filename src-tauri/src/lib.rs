@@ -12,6 +12,7 @@ mod settings;
 mod hotkeys;
 mod ai;
 mod capture;
+mod audio;
 
 use tauri::Manager;
 
@@ -20,7 +21,7 @@ use crate::window::overlay;
 use crate::window::tray;
 use crate::settings::SettingsState;
 use crate::db::DbState;
-use crate::ipc::commands::AiState;
+use crate::ipc::commands::{AiState, MicState};
 
 pub fn run() {
     // Initialize logging (controlled by RUST_LOG env var)
@@ -41,6 +42,7 @@ pub fn run() {
         .manage(SettingsState::default())
         .manage(HotkeyState::default())
         .manage(AiState::default())
+        .manage(MicState::default())
         // ---------- Setup ----------
         .setup(|app| {
             // ---------- Phase 3A — Database ----------
@@ -127,6 +129,9 @@ pub fn run() {
             ipc::commands::ai_start_live,
             ipc::commands::ai_send_audio,
             ipc::commands::ai_stop_live,
+            // ---- Phase 6 — Microphone capture pipeline ----
+            ipc::commands::mic_start,
+            ipc::commands::mic_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

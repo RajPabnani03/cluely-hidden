@@ -20,6 +20,21 @@ pub enum CaptureError {
 
     #[error("io error: {0}")]
     IoError(String),
+
+    #[error("no input audio device available")]
+    NoInputDevice,
+
+    #[error("failed to build input audio stream: {0}")]
+    StreamBuildFailed(String),
+
+    #[error("audio resampling failed: {0}")]
+    ResampleFailed(String),
+
+    #[error("cpal error: {0}")]
+    Cpal(String),
+
+    #[error("audio stream config error: {0}")]
+    AudioConfig(String),
 }
 
 #[derive(Debug, Error)]
