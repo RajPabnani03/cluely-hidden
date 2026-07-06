@@ -50,7 +50,7 @@ export function ChatStream({ mode }: ChatStreamProps) {
             <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px]">
               ⌘+Enter
             </kbd>{" "}
-            to capture your screen.
+            to advance (capture + speakable line) during a live session.
           </p>
         </div>
       </div>

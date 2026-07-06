@@ -7,6 +7,8 @@
 
 ## Sprint C — Dual brain & live UX ✅
 
+See **`docs/SPRINT-C.md`** for usage and verification checklist.
+
 | ID | Item | Status |
 |----|------|--------|
 | C1 | `dual_brain_step` IPC (capture + flash speakable while Live active) | Done |

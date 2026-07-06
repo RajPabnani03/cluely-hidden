@@ -52,6 +52,7 @@ import {
   onSpeakable,
   createConversation,
   getSettings,
+  saveMessage,
   setOverlayLayout,
   updateSettings,
   type CaptureMeta,
@@ -367,6 +368,19 @@ export function AssistantView() {
       });
       addScreenshotToTray(result.capture);
       setLastCapture(result.capture);
+      const convId = useOverlayStore.getState().currentConversationId;
+      if (convId && result.speakable.trim()) {
+        try {
+          await saveMessage({
+            conversationId: convId,
+            role: "assistant",
+            content: result.speakable.trim(),
+            model: "dual-brain",
+          });
+        } catch (e) {
+          console.warn("saveMessage (dual-brain) failed:", e);
+        }
+      }
     } catch (err) {
       console.error("dualBrainStep failed:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -386,6 +400,34 @@ export function AssistantView() {
   onCaptureRef.current = onCapture;
   onStartSessionRef.current = onStartSession;
   onDualBrainRef.current = onDualBrainStep;
+
+  const applyCarouselIndex = useCallback(
+    (next: number) => {
+      setResponseIndex(next);
+      const text = responseSnapshots[next];
+      if (!text) return;
+      setSpeakableText(text);
+      const msgs = useOverlayStore.getState().messages;
+      const last = msgs[msgs.length - 1];
+      if (last?.role === "assistant") {
+        updateLastMessage(text);
+      } else {
+        appendMessage({
+          id: `carousel-${next}-${Date.now()}`,
+          role: "assistant",
+          content: text,
+          createdAt: Date.now(),
+        });
+      }
+    },
+    [
+      appendMessage,
+      responseSnapshots,
+      setResponseIndex,
+      setSpeakableText,
+      updateLastMessage,
+    ],
+  );
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -409,17 +451,13 @@ export function AssistantView() {
         return;
       }
       if (action === "previous_response" && responseSnapshots.length > 0) {
-        const next = Math.max(0, responseIndex - 1);
-        setResponseIndex(next);
-        const text = responseSnapshots[next];
-        if (text) updateLastMessage(text);
+        applyCarouselIndex(Math.max(0, responseIndex - 1));
         return;
       }
       if (action === "next_response" && responseSnapshots.length > 0) {
-        const next = Math.min(responseSnapshots.length - 1, responseIndex + 1);
-        setResponseIndex(next);
-        const text = responseSnapshots[next];
-        if (text) updateLastMessage(text);
+        applyCarouselIndex(
+          Math.min(responseSnapshots.length - 1, responseIndex + 1),
+        );
       }
     })
       .then((fn) => {
@@ -428,10 +466,9 @@ export function AssistantView() {
       .catch(console.error);
     return () => unlisten?.();
   }, [
+    applyCarouselIndex,
     responseIndex,
-    responseSnapshots,
-    setResponseIndex,
-    updateLastMessage,
+    responseSnapshots.length,
   ]);
 
   const onStartMic = useCallback(async () => {
