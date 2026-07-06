@@ -7,12 +7,26 @@ import { StreamingCursor } from "./StreamingCursor";
 
 interface ChatStreamProps {
   mode: QuickAction;
+  /** When teleprompter shows dual-brain line, collapse duplicate in stream */
+  hideWhenSpeakable?: boolean;
+  speakableText?: string;
 }
 
+const MODE_HINT: Record<QuickAction, string> = {
+  assist: "Ask about your screen or conversation",
+  say: "Describe the moment — I'll suggest what to say",
+  followup: "Ask a follow-up about the meeting",
+  recap: "Summarize what happened so far",
+};
+
 /**
- * ChatStream — primary response area (Cluely-style consolidated text).
+ * ChatStream — secondary thread under the hero response.
  */
-export function ChatStream({ mode }: ChatStreamProps) {
+export function ChatStream({
+  mode,
+  hideWhenSpeakable,
+  speakableText,
+}: ChatStreamProps) {
   const messages = useOverlayStore((s) => s.messages);
   const streaming = useOverlayStore((s) => s.streaming);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -31,44 +45,49 @@ export function ChatStream({ mode }: ChatStreamProps) {
   const empty = messages.length === 0;
   const showLiveEmptyTyping = streaming && messages.length === 0;
 
-  if (empty && !streaming) {
-    const title =
-      mode === "assist"
-        ? "What do you want me to check?"
-        : mode === "say"
-          ? "What should I say?"
-          : mode === "followup"
-            ? "Ask about your conversation"
-            : "What should I recap?";
+  if (
+    hideWhenSpeakable &&
+    speakableText?.trim() &&
+    empty &&
+    !streaming
+  ) {
+    return null;
+  }
 
+  if (empty && !streaming) {
     return (
-      <div className="flex items-center justify-center min-h-[160px] text-center px-4">
-        <div className="space-y-2">
-          <p className="text-sm text-zinc-200 font-medium">{title}</p>
-          <p className="text-xs text-zinc-500 leading-relaxed">
-            Type a message below or press{" "}
-            <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px]">
-              ⌘+Enter
-            </kbd>{" "}
-            to advance (capture + speakable line) during a live session.
-          </p>
-        </div>
+      <div className="flex flex-col justify-center min-h-[120px] px-1 py-2 text-center">
+        <p className="text-[15px] text-zinc-200 font-medium tracking-tight">
+          {MODE_HINT[mode]}
+        </p>
+        <p className="mt-2 text-[11px] text-zinc-500 leading-relaxed max-w-[320px] mx-auto">
+          Press{" "}
+          <kbd className="px-1.5 py-0.5 rounded-md bg-zinc-800/90 border border-zinc-700/80 font-mono text-[10px] text-zinc-300">
+            ⌘↵
+          </kbd>{" "}
+          during a live session for instant assist, or type below.
+        </p>
       </div>
     );
   }
 
   if (showLiveEmptyTyping) {
     return (
-      <div className="flex items-center min-h-[160px] px-1 py-3">
+      <div className="flex items-center min-h-[120px] px-1 py-2">
         <TypingIndicator />
       </div>
     );
   }
 
+  const showUserLines = messages.some((m) => m.role === "user");
+
   return (
     <div
       id="assistant-scroll-region"
-      className="px-1 py-3 space-y-4 min-h-[160px] max-h-[380px] overflow-y-auto scrollbar-thin"
+      className={cn(
+        "px-1 py-2 space-y-3 min-h-[80px] max-h-[280px] overflow-y-auto scrollbar-thin",
+        !showUserLines && "max-h-[320px]",
+      )}
     >
       {messages.map((m, index) => {
         const isUser = m.role === "user";
@@ -80,14 +99,31 @@ export function ChatStream({ mode }: ChatStreamProps) {
         const showDots =
           isStreamingAssistant && m.content.length === 0;
 
+        if (
+          hideWhenSpeakable &&
+          speakableText?.trim() &&
+          !isUser &&
+          isLast &&
+          m.content === speakableText
+        ) {
+          return null;
+        }
+
         return (
           <div
             key={m.id}
             className={cn(
-              "text-[13px] leading-relaxed whitespace-pre-wrap transition-opacity duration-150",
-              isUser ? "text-zinc-400" : "text-zinc-100",
+              "leading-relaxed whitespace-pre-wrap transition-opacity duration-150",
+              isUser
+                ? "text-[11px] text-zinc-500"
+                : "text-[14px] text-zinc-100",
             )}
           >
+            {isUser && (
+              <span className="text-[10px] uppercase tracking-wide text-zinc-600 block mb-0.5">
+                You
+              </span>
+            )}
             {m.content}
             {showCaret && <StreamingCursor />}
             {showDots && <TypingIndicator className="inline-flex ml-0.5" />}

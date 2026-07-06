@@ -18,23 +18,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   EyeOff,
-  Square,
   MoreHorizontal,
-  Mic,
-  MicOff,
-  Camera,
-  StopCircle,
-  Wifi,
-  WifiOff,
-  Volume2,
 } from "lucide-react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useOverlayStore } from "../../lib/store";
 import { useRouter } from "../../lib/router";
 import { ChatStream } from "../../components/ChatStream";
 import { InputBar } from "../../components/InputBar";
-import { MicButton } from "../../components/MicButton";
-import { VuMeter } from "../../components/VuMeter";
 import { QuickActionChips, type QuickAction } from "../../components/QuickActionChips";
 import { RecordingPill } from "../../components/RecordingPill";
 import { HotkeyHintBar } from "../../components/HotkeyHintBar";
@@ -61,6 +51,8 @@ import {
 import { CompactPill } from "../../components/CompactPill";
 import { ScreenshotTray } from "../../components/ScreenshotTray";
 import { TeleprompterStrip } from "../../components/TeleprompterStrip";
+import { CluelyLogo } from "../../components/CluelyLogo";
+import { SessionToolbar } from "../../components/SessionToolbar";
 import { CardShell } from "../../components/ui";
 import { cn } from "../../lib/utils";
 
@@ -101,6 +93,7 @@ export function AssistantView() {
 
   const [activeChip, setActiveChip] = useState<QuickAction>("assist");
   const [showMenu, setShowMenu] = useState(false);
+  const [showSessionDetails, setShowSessionDetails] = useState(false);
 
   // ---- Phase 4: Live session state ----
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("idle");
@@ -113,7 +106,7 @@ export function AssistantView() {
   const [lastCapture, setLastCapture] = useState<CaptureMeta | null>(null);
   // ---- Microphone capture ----
   const [isMicRecording, setIsMicRecording] = useState(false);
-  const [micLevel, setMicLevel] = useState<number>(-Infinity);
+  const [, setMicLevel] = useState<number>(-Infinity);
   const [vadMode, setVadMode] = useState<"aggressive" | "balanced" | "manual">(
     "balanced",
   );
@@ -549,57 +542,35 @@ export function AssistantView() {
   }
 
   return (
-    <div className="h-full w-full flex items-start justify-center p-4 bg-transparent">
-      <CardShell className="max-h-[85vh]" opacity={overlayOpacity}>
-        {/* Header — draggable, no-drag buttons */}
+    <div className="h-full w-full flex items-start justify-center p-3 sm:p-4 bg-transparent animate-fade-in">
+      <CardShell className="max-h-[88vh]" opacity={overlayOpacity}>
         <header
-          className="relative flex items-center justify-between px-3 py-3 border-b border-white/[0.06] shrink-0 select-none"
+          className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/[0.06] shrink-0 select-none"
           data-tauri-drag-region
         >
-          {/* Logo pill */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-zinc-100 flex items-center justify-center">
-              <span className="text-zinc-900 text-[10px] font-bold">C</span>
-            </div>
-            <span className="text-[11px] font-semibold text-zinc-200 tracking-tight">
-              Cluely
-            </span>
-            {clickThrough && (
-              <span className="text-[9px] text-amber-400/90 border border-amber-500/30 px-1.5 py-0.5 rounded">
-                click-through
+          <CluelyLogo />
+          <div className="flex items-center gap-2 min-w-0" data-tauri-no-drag>
+            {sessionActive && (
+              <RecordingPill
+                active
+                label={status === "thinking" ? "Thinking" : "Recording"}
+              />
+            )}
+            {!sessionActive && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900/80 border border-white/[0.08] text-[10px] text-zinc-400">
+                <StatusDot status={status} />
+                {liveStatus === "error" ? "Check connection" : "Undetectable"}
               </span>
             )}
-          </div>
-
-          {/* Status pill, absolutely centered */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-800 text-[11px] font-medium text-zinc-200 border border-zinc-700/60">
-              <StatusDot status={status} />
-              {status === "ready" && "Ready"}
-              {status === "listening" && "Listening live"}
-              {status === "thinking" && "Thinking…"}
-            </span>
-            <RecordingPill
-              active={isMicRecording || status === "listening"}
-              label={isMicRecording ? "Mic" : activeChip === "recap" ? "Recording" : "Live"}
-            />
-            <VuMeter level={micLevel} />
-            <LiveStatusBadge status={liveStatus} message={statusMessage} />
-          </div>
-
-          {/* Controls */}
-          <div className="flex items-center gap-1" data-tauri-no-drag>
+            {clickThrough && (
+              <span className="text-[9px] text-amber-400/90 border border-amber-500/30 px-1.5 py-0.5 rounded-full">
+                pass-through
+              </span>
+            )}
             <button
-              onClick={stopEverything}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
-              title="Stop and clear"
-            >
-              <Square className="w-3.5 h-3.5" />
-              Stop
-            </button>
-            <button
+              type="button"
               onClick={() => hideOverlay().catch(console.error)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500/50"
               title="Hide overlay"
             >
               <EyeOff className="w-3.5 h-3.5" />
@@ -607,17 +578,28 @@ export function AssistantView() {
             </button>
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowMenu((s) => !s)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                className="p-1.5 rounded-full text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500/50"
                 aria-label="More options"
               >
                 <MoreHorizontal className="w-4 h-4" />
               </button>
               {showMenu && (
                 <div
-                  className="absolute right-0 top-full mt-1.5 w-36 rounded-xl border border-zinc-700/60 bg-zinc-900/95 backdrop-blur-xl shadow-xl py-1 z-50"
+                  className="absolute right-0 top-full mt-1.5 w-40 rounded-2xl border border-white/[0.08] bg-zinc-900/95 backdrop-blur-xl shadow-xl py-1 z-50"
                   onMouseLeave={() => setShowMenu(false)}
                 >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      void stopEverything();
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-red-300/90 hover:bg-red-500/10"
+                  >
+                    Stop & clear
+                  </button>
                   {[
                     ["settings", "Settings"],
                     ["history", "History"],
@@ -625,11 +607,12 @@ export function AssistantView() {
                   ].map(([view, label]) => (
                     <button
                       key={view}
+                      type="button"
                       onClick={() => {
                         setShowMenu(false);
                         setView(view as "settings" | "history" | "help");
                       }}
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+                      className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
                     >
                       {label}
                     </button>
@@ -640,158 +623,80 @@ export function AssistantView() {
           </div>
         </header>
 
-        {/* Mode prompt pill */}
-        <div className="px-4 pt-4 pb-1 shrink-0">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800/60 border border-zinc-700/60">
-            <span className="text-[11px] font-medium text-zinc-200">
-              {activeChip === "assist" && "Assist"}
-              {activeChip === "say" && "What should I say?"}
-              {activeChip === "followup" && "Follow-up questions"}
-              {activeChip === "recap" && "Recap"}
-            </span>
-          </div>
+        <div className="px-4 pt-3 pb-1 shrink-0">
+          <QuickActionChips active={activeChip} onSelect={setActiveChip} />
         </div>
 
-        {/* Response area */}
-        <div className="flex-1 min-h-0 px-4 flex flex-col gap-2 min-h-0">
+        <ScreenshotPreview />
+
+        <div className="flex-1 min-h-0 px-4 flex flex-col gap-2 overflow-hidden">
           {speakableText ? (
             <TeleprompterStrip text={speakableText} className="shrink-0" />
           ) : null}
           {responseSnapshots.length > 1 && (
-            <div className="shrink-0 text-[10px] text-zinc-500 tabular-nums">
-              Response {responseIndex + 1} / {responseSnapshots.length}
-              <span className="text-zinc-600 ml-1">(⌘← ⌘→)</span>
+            <div className="shrink-0 flex items-center justify-between text-[10px] text-zinc-500 tabular-nums">
+              <span>
+                Response {responseIndex + 1} / {responseSnapshots.length}
+              </span>
+              <span className="text-zinc-600">⌘← · ⌘→</span>
             </div>
           )}
-          <ChatStream mode={activeChip} />
+          <ChatStream
+            mode={activeChip}
+            hideWhenSpeakable
+            speakableText={speakableText}
+          />
         </div>
 
-        {/* Screenshot preview (server-pushed) */}
-        <ScreenshotTray
-          items={screenshotTray}
-          onRemove={removeScreenshotFromTray}
-          onClear={clearScreenshotTray}
-        />
-        <ScreenshotPreview />
-
-        {/* Quick action chips */}
-        <div className="px-4 py-3 shrink-0">
-          <QuickActionChips active={activeChip} onSelect={setActiveChip} />
-        </div>
-
-        {/* Phase 4: Live session controls */}
-        <div className="px-4 pb-3 shrink-0">
-          <div
-            className={cn(
-              "rounded-xl border border-white/[0.08] bg-zinc-900/60 backdrop-blur-xl p-3 space-y-2.5",
-            )}
-            role="group"
-            aria-label="Gemini Live session controls"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                {sessionActive ? (
-                  <Mic className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                ) : (
-                  <MicOff className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                )}
-                <span className="text-[11px] font-semibold text-zinc-200 truncate">
-                  Gemini Live
-                </span>
-                {audioPlaying && (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-blue-300">
-                    <Volume2 className="w-3 h-3 animate-pulse" />
-                    playing
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {!sessionActive ? (
-                  <button
-                    onClick={onStartSession}
-                    disabled={busy}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                    Start session
-                  </button>
-                ) : (
-                  <button
-                    onClick={onStopSession}
-                    disabled={busy}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
-                  >
-                    <StopCircle className="w-3.5 h-3.5" />
-                    Stop session
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={onCapture}
-                disabled={busy}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/60 transition-colors disabled:opacity-50"
-                title="Capture the primary display"
-              >
-                <Camera className="w-3.5 h-3.5" />
-                Take screenshot
-              </button>
-              <MicButton
-                isRecording={isMicRecording}
-                onStart={onStartMic}
-                onStop={onStopMic}
-                disabled={!sessionActive || busy}
-                vadMode={vadMode}
-                title={
-                  !sessionActive
-                    ? "Start a Gemini Live session first"
-                    : isMicRecording
-                      ? "Stop microphone"
-                      : "Start microphone"
-                }
-              />
-              {lastCapture && (
-                <span className="text-[10px] text-zinc-500 tabular-nums">
-                  last capture: {lastCapture.width}×{lastCapture.height}
-                </span>
-              )}
-            </div>
-
-            {error && (
-              <div
-                className="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300"
-                role="alert"
-              >
-                {error}
-              </div>
-            )}
-
-            {transcript && (
-              <div className="rounded-md border border-white/[0.06] bg-zinc-950/60 px-2 py-1.5">
-                <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-0.5">
-                  Transcript
-                </div>
-                <p className="text-[11.5px] text-zinc-200 whitespace-pre-wrap break-words leading-relaxed">
-                  {transcript}
-                </p>
-              </div>
-            )}
+        {screenshotTray.length > 0 && (
+          <div className="px-4 shrink-0">
+            <ScreenshotTray
+              items={screenshotTray}
+              onRemove={removeScreenshotFromTray}
+              onClear={clearScreenshotTray}
+            />
           </div>
+        )}
+
+        <div className="px-4 py-3 shrink-0 border-t border-white/[0.04]">
+          <SessionToolbar
+            sessionActive={sessionActive}
+            busy={busy}
+            isMicRecording={isMicRecording}
+            audioPlaying={audioPlaying}
+            vadMode={vadMode}
+            onStartSession={onStartSession}
+            onStopSession={onStopSession}
+            onCapture={onCapture}
+            onStartMic={onStartMic}
+            onStopMic={onStopMic}
+            transcript={transcript}
+            error={error}
+            expandedDetails={showSessionDetails}
+            onToggleDetails={() => setShowSessionDetails((v) => !v)}
+            captureHint={
+              lastCapture
+                ? `${lastCapture.width}×${lastCapture.height}`
+                : null
+            }
+          />
+          {liveStatus === "reconnecting" && (
+            <p className="text-[10px] text-amber-400/90 mt-1.5 px-1">
+              Reconnecting… {statusMessage}
+            </p>
+          )}
         </div>
 
-        {/* Input bar */}
-        <div className="p-3 border-t border-white/[0.06] shrink-0">
+        <div className="px-4 pb-3 shrink-0">
           <InputBar mode={activeChip} />
         </div>
 
-        {/* Hotkey hint bar — Cluely-style keycap row */}
         <HotkeyHintBar
           hints={[
             hintFor("toggle_visibility", "Hide"),
-            hintFor("next_step", "Next step"),
-            hintFor("cycle_stealth_tier", "Stealth"),
+            hintFor("next_step", "Assist"),
+            hintFor("previous_response", "Prev"),
+            hintFor("next_response", "Next"),
           ]}
         />
       </CardShell>
@@ -807,42 +712,4 @@ function StatusDot({ status }: { status: HeaderStatus }) {
         ? "bg-blue-400"
         : "bg-amber-400 animate-pulse";
   return <span className={cn("w-1.5 h-1.5 rounded-full", color)} />;
-}
-
-function LiveStatusBadge({
-  status,
-  message,
-}: {
-  status: LiveStatus;
-  message: string;
-}) {
-  if (status === "idle") return null;
-
-  const palette =
-    status === "ready"
-      ? { dot: "bg-emerald-400", text: "text-emerald-300", Icon: Wifi }
-      : status === "reconnecting"
-        ? { dot: "bg-amber-400 animate-pulse", text: "text-amber-300", Icon: Wifi }
-        : { dot: "bg-red-400", text: "text-red-300", Icon: WifiOff };
-
-  const label =
-    status === "ready"
-      ? "live ready"
-      : status === "reconnecting"
-        ? "reconnecting"
-        : "live error";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-800 text-[10px] font-medium border border-zinc-700/60",
-        palette.text,
-      )}
-      title={message || label}
-    >
-      <span className={cn("w-1.5 h-1.5 rounded-full", palette.dot)} />
-      <palette.Icon className="w-3 h-3" />
-      {label}
-    </span>
-  );
 }

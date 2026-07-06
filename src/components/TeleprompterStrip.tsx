@@ -1,4 +1,4 @@
-/** Teleprompter strip — large speakable answer from dual-brain (Sprint C). */
+/** Teleprompter — primary “say this” hero (Cluely focal response). */
 import { cn } from "../lib/utils";
 
 export function TeleprompterStrip({
@@ -12,17 +12,17 @@ export function TeleprompterStrip({
   return (
     <div
       className={cn(
-        "rounded-xl border border-emerald-500/30 bg-emerald-950/40 px-3 py-2.5",
-        "shadow-[0_0_24px_rgba(16,185,129,0.08)]",
+        "rounded-2xl border border-white/[0.08] bg-zinc-950/40 px-4 py-3",
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
         className,
       )}
       role="status"
       aria-live="polite"
     >
-      <div className="text-[10px] uppercase tracking-widest text-emerald-400/90 mb-1">
-        Say this
-      </div>
-      <p className="text-[15px] sm:text-base font-medium text-emerald-50 leading-snug">
+      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500 mb-2">
+        AI response
+      </p>
+      <p className="text-[17px] font-medium text-zinc-50 leading-[1.45] tracking-[-0.01em]">
         {text}
       </p>
     </div>

@@ -93,7 +93,10 @@ export function SettingsView() {
         )}
       >
         <header className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-          <h2 className="text-sm font-semibold text-zinc-100">Settings</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-zinc-100 tracking-tight">Settings</h2>
+            <span className="text-[10px] text-zinc-600">Cluely</span>
+          </div>
           <button
             onClick={back}
             className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"

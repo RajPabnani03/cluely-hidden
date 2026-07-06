@@ -9,6 +9,7 @@ interface MicButtonProps {
   disabled?: boolean;
   title?: string;
   vadMode?: "aggressive" | "balanced" | "manual";
+  className?: string;
 }
 
 export function MicButton({
@@ -18,6 +19,7 @@ export function MicButton({
   disabled = false,
   title,
   vadMode = "balanced",
+  className,
 }: MicButtonProps) {
   const handleClick = () => {
     if (disabled) return;
@@ -53,6 +55,7 @@ export function MicButton({
         isRecording
           ? "bg-red-600/90 hover:bg-red-500 text-white border border-red-500/50"
           : "text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/60",
+        className,
       )}
       aria-pressed={isRecording}
       aria-label={isRecording ? "Stop microphone" : "Start microphone"}
