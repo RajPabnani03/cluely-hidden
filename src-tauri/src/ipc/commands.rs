@@ -283,15 +283,66 @@ pub async fn ai_start_live(
     api_key: String,
     system_instruction: String,
 ) -> std::result::Result<(), String> {
-    let client = GeminiLiveClient::connect(&app, &api_key, &system_instruction)
+    ai_start_live_impl(&app, &state, api_key.trim(), system_instruction).await
+}
+
+/// Start Gemini Live using the stored API key and active profile (or first profile).
+#[tauri::command]
+pub async fn ai_start_live_configured(
+    app: AppHandle,
+    ai_state: tauri::State<'_, AiState>,
+    settings_state: tauri::State<'_, SettingsState>,
+    db_state: tauri::State<'_, DbState>,
+    profile_id: Option<String>,
+) -> std::result::Result<(), String> {
+    let settings = settings_state.get();
+    let key = settings.gemini_api_key.trim();
+    if key.is_empty() {
+        return Err(
+            "Add your Gemini API key in Settings → Model → Gemini API key.".to_string(),
+        );
+    }
+
+    let system_prompt = {
+        let guard = conn(&db_state);
+        resolve_profile(&guard, profile_id.or(settings.active_profile_id))?.system_prompt
+    };
+
+    ai_start_live_impl(&app, &ai_state, key, system_prompt).await
+}
+
+async fn ai_start_live_impl(
+    app: &AppHandle,
+    state: &tauri::State<'_, AiState>,
+    api_key: &str,
+    system_instruction: String,
+) -> std::result::Result<(), String> {
+    if api_key.is_empty() {
+        return Err("Gemini API key is empty.".to_string());
+    }
+
+    let client = GeminiLiveClient::connect(app, api_key, &system_instruction)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Lock the (sync) mutex — these are quick operations and won't
-    // block for long, even though `start` itself is async.
     let mut guard = state.0.lock().expect("ai mutex poisoned");
     *guard = Some(client);
     Ok(())
+}
+
+fn resolve_profile(
+    conn: &rusqlite::Connection,
+    profile_id: Option<String>,
+) -> std::result::Result<crate::db::profiles::Profile, String> {
+    if let Some(id) = profile_id {
+        return crate::db::profiles::get(conn, &id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("profile not found: {id}"));
+    }
+    let list = crate::db::profiles::list(conn).map_err(|e| e.to_string())?;
+    list.into_iter()
+        .next()
+        .ok_or_else(|| "no profiles in database".to_string())
 }
 
 /// Forward a base64-encoded 24 kHz / mono PCM chunk to Gemini Live.

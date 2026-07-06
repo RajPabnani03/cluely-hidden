@@ -40,6 +40,7 @@ vite.config.js
 
 # Local config
 .env
+scripts/signing.env
 .env.local
 .env.*.local
 

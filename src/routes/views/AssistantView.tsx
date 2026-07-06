@@ -42,7 +42,7 @@ import { ScreenshotPreview } from "../../components/ScreenshotPreview";
 import {
   onShortcutTriggered,
   hideOverlay,
-  aiStartLive,
+  aiStartLiveConfigured,
   aiStopLive,
   captureScreen,
   micStart,
@@ -227,13 +227,7 @@ export function AssistantView() {
     setError(null);
     setBusy(true);
     try {
-      // Placeholder API key from settings — the Rust layer will pick the
-      // real key from app config when available. This just proves the
-      // command wires up.
-      const apiKey = "demo-key-replace-in-settings";
-      const systemInstruction =
-        "You are a concise, helpful stealth assistant. Keep answers short and ready to speak.";
-      await aiStartLive(apiKey, systemInstruction);
+      await aiStartLiveConfigured(null);
       setSessionActive(true);
       setLiveStatus("reconnecting"); // backend hasn't confirmed yet; this flips to "ready" on ai:status
       setTranscript("");

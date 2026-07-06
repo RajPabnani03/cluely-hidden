@@ -123,9 +123,11 @@ export function SettingsView() {
             </>
           )}
 
-          {activeTab === "profiles" && (
+          {activeTab === "profiles" && settings && (
             <ProfileSection
               profiles={profiles}
+              activeProfileId={settings.activeProfileId ?? null}
+              onSetActive={(id) => applySettings({ activeProfileId: id })}
               onChange={setProfiles}
               onStatus={flash}
             />
@@ -133,6 +135,25 @@ export function SettingsView() {
 
           {activeTab === "model" && settings && (
             <>
+              <Section title="Gemini API key">
+                <p className="text-[11px] text-zinc-500 mb-2">
+                  Required for Live sessions. Create a key at{" "}
+                  <span className="text-zinc-400">aistudio.google.com</span>.
+                </p>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={settings.geminiApiKey ?? ""}
+                  onChange={(e) =>
+                    setSettings({ ...settings, geminiApiKey: e.target.value })
+                  }
+                  onBlur={() =>
+                    applySettings({ geminiApiKey: settings.geminiApiKey ?? "" })
+                  }
+                  placeholder="AIza…"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </Section>
               <Section title="Model">
                 <div className="grid grid-cols-1 gap-2">
                   {MODEL_OPTIONS.map((m) => (
@@ -172,10 +193,14 @@ export function SettingsView() {
 
 function ProfileSection({
   profiles,
+  activeProfileId,
+  onSetActive,
   onChange,
   onStatus,
 }: {
   profiles: DbProfile[];
+  activeProfileId: string | null;
+  onSetActive: (id: string) => void;
   onChange: (p: DbProfile[]) => void;
   onStatus: (s: string) => void;
 }) {
@@ -221,11 +246,25 @@ function ProfileSection({
             key={p.id}
             className="rounded-lg border border-zinc-800 bg-zinc-800/40 p-3"
           >
-            <div className="text-sm font-medium text-zinc-200">
-              {p.name}
-              {p.is_builtin && (
-                <span className="ml-2 text-[10px] uppercase tracking-wide text-zinc-500">builtin</span>
-              )}
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-medium text-zinc-200">
+                {p.name}
+                {p.is_builtin && (
+                  <span className="ml-2 text-[10px] uppercase tracking-wide text-zinc-500">builtin</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => onSetActive(p.id)}
+                className={cn(
+                  "text-[10px] px-2 py-0.5 rounded-md border transition-colors",
+                  activeProfileId === p.id
+                    ? "border-blue-500/60 bg-blue-600/20 text-blue-200"
+                    : "border-zinc-700 text-zinc-500 hover:text-zinc-300",
+                )}
+              >
+                {activeProfileId === p.id ? "Live default" : "Use for live"}
+              </button>
             </div>
             <textarea
               defaultValue={p.system_prompt}

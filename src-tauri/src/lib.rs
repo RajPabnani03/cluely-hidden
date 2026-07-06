@@ -127,6 +127,7 @@ pub fn run() {
             ipc::commands::capture_screen,
             // ---- Phase 5 — AI Live (Gemini bidi WebSocket) ----
             ipc::commands::ai_start_live,
+            ipc::commands::ai_start_live_configured,
             ipc::commands::ai_send_audio,
             ipc::commands::ai_stop_live,
             // ---- Phase 6 — Microphone capture pipeline ----

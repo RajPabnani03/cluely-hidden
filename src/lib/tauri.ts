@@ -53,6 +53,8 @@ export interface AppSettings {
   captureEnabled: boolean;
   audioEnabled: boolean;
   launchAtLogin: boolean;
+  geminiApiKey: string;
+  activeProfileId?: string | null;
 }
 
 export async function getSettings(): Promise<AppSettings> {
@@ -338,12 +340,19 @@ export interface CaptureMeta {
   createdAt: number;
 }
 
-/** Open a Gemini Live WebSocket session. */
+/** Open a Gemini Live WebSocket session (explicit key + instruction). */
 export async function aiStartLive(
   apiKey: string,
   systemInstruction: string,
 ): Promise<void> {
   return invoke("ai_start_live", { apiKey, systemInstruction });
+}
+
+/** Open Gemini Live using Settings API key + active profile system prompt. */
+export async function aiStartLiveConfigured(
+  profileId?: string | null,
+): Promise<void> {
+  return invoke("ai_start_live_configured", { profileId: profileId ?? null });
 }
 
 /** Stream a chunk of 16 kHz mono PCM audio to the live session. */
