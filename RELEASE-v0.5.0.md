@@ -42,18 +42,17 @@ Stealth overlay that **listens (mic), sees (screenshot), and streams answers** i
 
 ## M3 — Release train
 
-- [ ] `CHANGELOG.md`
-- [ ] `README.md` (v0.5, ⌘\\, Gemini Live, settings)
-- [ ] Version `0.5.0` in `package.json`, `Cargo.toml`, `tauri.conf.json`
-- [ ] `npm run typecheck` + `npm run build` + `cargo check`
-- [ ] `npm run tauri:build` → `.dmg` in `src-tauri/target/release/bundle/dmg/`
-- [ ] Git tag `v0.5.0` + release notes
+- [x] `CHANGELOG.md`
+- [x] `README.md` (v0.5, Gemini Live, settings)
+- [x] Version `0.5.0` in `package.json`, `Cargo.toml`, `tauri.conf.json`
+- [ ] `npm run tauri:build` on your machine (unsigned)
+- [ ] Git tag `v0.5.0`
 
 ---
 
 ## M4 — Code signing & notarization (Option C)
 
-### Current machine status (check before M4)
+**Deferred** — shipping **v0.5.0 unsigned** per product decision. Scaffold remains (`entitlements.plist`, `scripts/signing.env.example`). Re-enable when Developer ID cert is on the build Mac.
 
 ```bash
 security find-identity -v -p codesigning
