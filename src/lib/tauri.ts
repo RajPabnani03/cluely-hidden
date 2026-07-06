@@ -319,3 +319,44 @@ export async function searchConversations(
 export type Conversation = DbConversation;
 export type Message = DbMessage;
 export type Profile = DbProfile;
+
+// ---------- Phase 4: Gemini Live + screen capture IPC ----------
+//
+// These wrappers call commands added in src-tauri/src/ipc/commands.rs
+// (commit 806b31a). They are intentionally minimal — typed envelopes
+// only, no extra logic. The frontend (`AssistantView`) handles event
+// subscription and UI state.
+
+/** Metadata describing a single screen capture, returned by `captureScreen`. */
+export interface CaptureMeta {
+  id: string;
+  /** Absolute path to the PNG on disk (Rust `PathBuf` → string). */
+  path: string;
+  width: number;
+  height: number;
+  /** Unix epoch (ms) when the capture was written. */
+  createdAt: number;
+}
+
+/** Open a Gemini Live WebSocket session. */
+export async function aiStartLive(
+  apiKey: string,
+  systemInstruction: string,
+): Promise<void> {
+  return invoke("ai_start_live", { apiKey, systemInstruction });
+}
+
+/** Stream a chunk of 16 kHz mono PCM audio to the live session. */
+export async function aiSendAudio(pcmBase64: string): Promise<void> {
+  return invoke("ai_send_audio", { pcmBase64 });
+}
+
+/** Close the active Gemini Live session, if any. */
+export async function aiStopLive(): Promise<void> {
+  return invoke("ai_stop_live");
+}
+
+/** Capture the primary display and return its metadata. */
+export async function captureScreen(): Promise<CaptureMeta> {
+  return invoke<CaptureMeta>("capture_screen");
+}
