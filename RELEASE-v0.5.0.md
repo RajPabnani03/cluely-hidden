@@ -46,7 +46,7 @@ Stealth overlay that **listens (mic), sees (screenshot), and streams answers** i
 - [x] `README.md` (v0.5, Gemini Live, settings)
 - [x] Version `0.5.0` in `package.json`, `Cargo.toml`, `tauri.conf.json`
 - [ ] `npm run tauri:build` on your machine (unsigned)
-- [ ] Git tag `v0.5.0`
+- [x] Git tag `v0.5.0`
 
 ---
 
