@@ -39,6 +39,7 @@ import { QuickActionChips, type QuickAction } from "../../components/QuickAction
 import { RecordingPill } from "../../components/RecordingPill";
 import { HotkeyHintBar } from "../../components/HotkeyHintBar";
 import { ScreenshotPreview } from "../../components/ScreenshotPreview";
+import { persistLiveSessionToHistory } from "../../lib/session-persist";
 import {
   onShortcutTriggered,
   hideOverlay,
@@ -47,6 +48,8 @@ import {
   captureScreen,
   micStart,
   micStop,
+  createConversation,
+  getSettings,
   type CaptureMeta,
   type MicLevel,
 } from "../../lib/tauri";
@@ -60,12 +63,15 @@ type LiveStatus = "idle" | "ready" | "reconnecting" | "error";
 export function AssistantView() {
   const messages = useOverlayStore((s) => s.messages);
   const streaming = useOverlayStore((s) => s.streaming);
+  const currentConversationId = useOverlayStore((s) => s.currentConversationId);
+  const setConversationId = useOverlayStore((s) => s.setConversationId);
   const clearMessages = useOverlayStore((s) => s.clearMessages);
   const setStreaming = useOverlayStore((s) => s.setStreaming);
   const appendAssistantStreamChunk = useOverlayStore(
     (s) => s.appendAssistantStreamChunk,
   );
   const setView = useRouter((s) => s.setView);
+  const currentView = useRouter((s) => s.currentView);
 
   const [activeChip, setActiveChip] = useState<QuickAction>("assist");
   const [showMenu, setShowMenu] = useState(false);
@@ -74,6 +80,14 @@ export function AssistantView() {
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [transcript, setTranscript] = useState<string>("");
+  const [overlayOpacity, setOverlayOpacity] = useState(0.92);
+
+  useEffect(() => {
+    if (currentView !== "assistant") return;
+    getSettings()
+      .then((s) => setOverlayOpacity(s.overlayOpacity ?? 0.92))
+      .catch(() => {});
+  }, [currentView]);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -227,10 +241,14 @@ export function AssistantView() {
     setError(null);
     setBusy(true);
     try {
-      await aiStartLiveConfigured(null);
+      const settings = await getSettings();
+      const conv = await createConversation(settings.activeProfileId ?? null);
+      setConversationId(conv.id);
+      await aiStartLiveConfigured(conv.id);
       setSessionActive(true);
-      setLiveStatus("reconnecting"); // backend hasn't confirmed yet; this flips to "ready" on ai:status
+      setLiveStatus("reconnecting");
       setTranscript("");
+      clearMessages();
       setStreaming(false);
     } catch (err) {
       console.error("aiStartLive failed:", err);
@@ -239,13 +257,12 @@ export function AssistantView() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [clearMessages, setConversationId, setStreaming]);
 
   const onStopSession = useCallback(async () => {
     setError(null);
     setBusy(true);
     try {
-      // Ensure the mic is released whenever the live session ends.
       if (isMicRecording) {
         try {
           await micStop();
@@ -256,6 +273,14 @@ export function AssistantView() {
         setMicLevel(-Infinity);
       }
       await aiStopLive();
+      const settings = await getSettings();
+      const savedId = await persistLiveSessionToHistory({
+        conversationId: currentConversationId,
+        messages,
+        transcript,
+        profileId: settings.activeProfileId ?? null,
+      });
+      if (savedId) setConversationId(savedId);
       setSessionActive(false);
       setLiveStatus("idle");
       setStatusMessage("stopped");
@@ -265,7 +290,13 @@ export function AssistantView() {
     } finally {
       setBusy(false);
     }
-  }, [isMicRecording]);
+  }, [
+    currentConversationId,
+    isMicRecording,
+    messages,
+    setConversationId,
+    transcript,
+  ]);
 
   const onCapture = useCallback(async () => {
     setError(null);
@@ -322,7 +353,7 @@ export function AssistantView() {
 
   return (
     <div className="h-full w-full flex items-start justify-center p-4 bg-transparent">
-      <CardShell className="max-h-[85vh]">
+      <CardShell className="max-h-[85vh]" opacity={overlayOpacity}>
         {/* Header — draggable, no-drag buttons */}
         <header
           className="relative flex items-center justify-between px-3 py-3 border-b border-white/[0.06] shrink-0 select-none"

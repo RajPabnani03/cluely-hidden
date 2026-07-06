@@ -10,12 +10,12 @@ Living backlog derived from [`VISION.md`](./VISION.md). **Status:** v0.5.0 tagge
 
 | ID | Work | Owner lane | Acceptance |
 |----|------|------------|------------|
-| A1 | Gemini key in **Keychain**; `get_settings` returns `geminiApiKeyConfigured` only | Rust | Key survives restart; never in git/logs |
-| A2 | `tauri-plugin-store` or SQLite `app_settings` for theme, hotkeys, active profile | Rust + FE | Restart preserves non-secret settings |
-| A3 | Persist **live session** turns to `messages` on `ai_stop_live` | Rust + FE | History view shows last live chat |
-| A4 | **System audio** spike (ScreenCaptureKit or port cheating-daddy pattern) | Rust | Level meter + optional send to Live |
-| A5 | **Transparency** slider + window position save | FE + Rust | Restores on launch |
-| A6 | E2E doc `docs/E2E-v0.6.md` | QA | Checklist: key, live, capture, history |
+| A1 | Gemini key in **Keychain**; `get_settings` returns `geminiApiKeyConfigured` only | Rust | ✅ Done |
+| A2 | `settings.json` for theme, hotkeys, active profile, opacity | Rust + FE | ✅ Done |
+| A3 | Persist **live session** on Stop → SQLite | Rust + FE | ✅ Done |
+| A4 | **System audio** spike doc | Rust | ✅ `docs/spike-system-audio.md` |
+| A5 | **Transparency** slider | FE + Rust | ✅ Opacity (position save → Sprint B) |
+| A6 | E2E doc `docs/E2E-v0.6.md` | QA | ✅ Done |
 
 ---
 

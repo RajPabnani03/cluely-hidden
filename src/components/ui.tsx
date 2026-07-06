@@ -4,26 +4,21 @@ import { cn } from "../lib/utils";
 export interface CardShellProps {
   children: ReactNode;
   className?: string;
+  /** Panel opacity 0.4–1.0 (glass strength). */
+  opacity?: number;
 }
 
-/**
- * Shared card shell for the floating overlay card and secondary sheets.
- *
- * Matches the official Cluely UX:
- *   - rounded-[20px]
- *   - dark zinc glass (bg-zinc-900/95, backdrop-blur)
- *   - subtle border (white/8%)
- *   - heavy shadow
- */
-export function CardShell({ children, className }: CardShellProps) {
+export function CardShell({ children, className, opacity = 0.95 }: CardShellProps) {
+  const alpha = Math.min(1, Math.max(0.4, opacity));
   return (
     <div
       className={cn(
         "w-full max-w-[420px] flex flex-col rounded-[20px] overflow-hidden",
-        "bg-zinc-900/95 backdrop-blur-xl border border-white/[0.08]",
+        "backdrop-blur-xl border border-white/[0.08]",
         "shadow-[0_20px_50px_rgba(0,0,0,0.5)]",
         className,
       )}
+      style={{ backgroundColor: `rgba(24, 24, 27, ${alpha})` }}
     >
       {children}
     </div>

@@ -8,6 +8,7 @@ mod db;
 mod error;
 mod window;
 mod ipc;
+mod secrets;
 mod settings;
 mod hotkeys;
 mod ai;
@@ -39,7 +40,10 @@ pub fn run() {
                 .build(),
         )
         // ---------- State ----------
-        .manage(SettingsState::default())
+        .manage(SettingsState::load().unwrap_or_else(|e| {
+            log::error!("settings load failed, using defaults: {e:#}");
+            SettingsState::default()
+        }))
         .manage(HotkeyState::default())
         .manage(AiState::default())
         .manage(MicState::default())

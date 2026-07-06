@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::db::DbState;
 use crate::error::Result;
-use crate::settings::{AppSettings, SettingsPatch, SettingsState};
+use crate::settings::{AppSettingsPublic, SettingsPatch, SettingsState};
 use crate::hotkeys::actions;
 use crate::hotkeys::registry::HotkeyState;
 use crate::window::helpers;
@@ -47,15 +47,15 @@ pub fn quit_app(app: AppHandle) {
 // ---------- Settings ----------
 
 #[tauri::command]
-pub fn get_settings(state: tauri::State<'_, SettingsState>) -> Result<AppSettings> {
-    Ok(state.get())
+pub fn get_settings(state: tauri::State<'_, SettingsState>) -> Result<AppSettingsPublic> {
+    Ok(state.get_public())
 }
 
 #[tauri::command]
 pub fn update_settings(
     state: tauri::State<'_, SettingsState>,
     patch: SettingsPatch,
-) -> Result<AppSettings> {
+) -> Result<AppSettingsPublic> {
     state.update(patch)
 }
 

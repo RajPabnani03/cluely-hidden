@@ -35,8 +35,8 @@ rg -i 'AIza[0-9A-Za-z_-]{20,}|sk-[a-zA-Z0-9]{20,}' --glob '!node_modules' .
 
 ## Roadmap (hardening)
 
-- [ ] Persist Gemini key in **macOS Keychain**, not plaintext JSON
-- [ ] `get_settings` returns `geminiApiKeyConfigured: boolean` instead of the raw key
+- [x] Persist Gemini key in **macOS Keychain**, not plaintext JSON
+- [x] `get_settings` returns `geminiApiKeyConfigured: boolean` instead of the raw key
 - [ ] Redact query strings in WebSocket error logs
 - [ ] Optional: GitHub Actions secret scanning on PRs
 

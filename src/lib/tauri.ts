@@ -53,16 +53,26 @@ export interface AppSettings {
   captureEnabled: boolean;
   audioEnabled: boolean;
   launchAtLogin: boolean;
-  geminiApiKey: string;
+  /** True when a Gemini key exists in Keychain (raw key never returned). */
+  geminiApiKeyConfigured: boolean;
   activeProfileId?: string | null;
+  /** Overlay panel opacity 0.4–1.0 */
+  overlayOpacity: number;
 }
+
+/** Patch for update_settings — include geminiApiKey only when setting/changing the key. */
+export type SettingsUpdatePatch = Partial<
+  Omit<AppSettings, "geminiApiKeyConfigured">
+> & {
+  geminiApiKey?: string;
+};
 
 export async function getSettings(): Promise<AppSettings> {
   return invoke("get_settings");
 }
 
 export async function updateSettings(
-  patch: Partial<AppSettings>,
+  patch: SettingsUpdatePatch,
 ): Promise<AppSettings> {
   return invoke("update_settings", { patch });
 }
@@ -115,8 +125,7 @@ function realisticPlaceholderResponse(message: string): string {
 
 function isApiConfigured(settings: AppSettings | null): boolean {
   if (!settings) return false;
-  const model = settings.model?.trim().toLowerCase();
-  return !!model && model !== "none" && !model.startsWith("demo:");
+  return settings.geminiApiKeyConfigured;
 }
 
 export async function chat(input: {

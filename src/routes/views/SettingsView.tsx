@@ -30,12 +30,14 @@ export function SettingsView() {
   const [profiles, setProfiles] = useState<DbProfile[]>([]);
   const [activeTab, setActiveTab] = useState<"general" | "profiles" | "model">("general");
   const [status, setStatus] = useState("");
+  const [geminiKeyDraft, setGeminiKeyDraft] = useState("");
 
   useEffect(() => {
     Promise.all([getSettings(), listProfiles()])
       .then(([s, p]) => {
         setSettings(s);
         setProfiles(p);
+        setGeminiKeyDraft("");
       })
       .catch(console.error);
   }, []);
@@ -45,13 +47,17 @@ export function SettingsView() {
     setTimeout(() => setStatus(""), 1800);
   };
 
-  const applySettings = async (patch: Partial<AppSettings>) => {
+  const applySettings = async (patch: import("../../lib/tauri").SettingsUpdatePatch) => {
     if (!settings) return;
-    const next = { ...settings, ...patch };
     try {
-      const updated = await updateSettings(next);
+      const updated = await updateSettings(patch);
       setSettings(updated);
-      flash("Saved");
+      if (!("geminiApiKey" in patch)) {
+        flash("Saved");
+      } else {
+        setGeminiKeyDraft("");
+        flash("API key saved");
+      }
     } catch (err) {
       console.error(err);
       flash("Save failed");
@@ -113,6 +119,27 @@ export function SettingsView() {
                   onChange={(v) => applySettings({ theme: v as AppSettings["theme"] })}
                 />
               </Section>
+              <Section title="Overlay">
+                <Row label={`Panel opacity (${Math.round((settings.overlayOpacity ?? 0.92) * 100)}%)`}>
+                  <input
+                    type="range"
+                    min={40}
+                    max={100}
+                    value={Math.round((settings.overlayOpacity ?? 0.92) * 100)}
+                    onChange={(e) => {
+                      const v = Number(e.target.value) / 100;
+                      setSettings({ ...settings, overlayOpacity: v });
+                    }}
+                    onMouseUp={() =>
+                      applySettings({ overlayOpacity: settings.overlayOpacity })
+                    }
+                    onTouchEnd={() =>
+                      applySettings({ overlayOpacity: settings.overlayOpacity })
+                    }
+                    className="w-full accent-blue-500"
+                  />
+                </Row>
+              </Section>
               <Section title="Toggle hotkey">
                 <Row label="Show / hide overlay">
                   <kbd className="font-mono text-xs bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-200">
@@ -143,14 +170,18 @@ export function SettingsView() {
                 <input
                   type="password"
                   autoComplete="off"
-                  value={settings.geminiApiKey ?? ""}
-                  onChange={(e) =>
-                    setSettings({ ...settings, geminiApiKey: e.target.value })
+                  value={geminiKeyDraft}
+                  onChange={(e) => setGeminiKeyDraft(e.target.value)}
+                  onBlur={() => {
+                    if (geminiKeyDraft.trim()) {
+                      applySettings({ geminiApiKey: geminiKeyDraft.trim() });
+                    }
+                  }}
+                  placeholder={
+                    settings.geminiApiKeyConfigured
+                      ? "••••••••  (enter new key to replace)"
+                      : "AIza…"
                   }
-                  onBlur={() =>
-                    applySettings({ geminiApiKey: settings.geminiApiKey ?? "" })
-                  }
-                  placeholder="AIza…"
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </Section>
