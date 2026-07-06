@@ -360,3 +360,32 @@ export async function aiStopLive(): Promise<void> {
 export async function captureScreen(): Promise<CaptureMeta> {
   return invoke<CaptureMeta>("capture_screen");
 }
+
+// ---------- Microphone capture (Rust lane in flight) ----------
+//
+// The Rust Lead subagent is shipping these commands in parallel:
+//
+//   mic_start() -> Result<(), String>
+//   mic_stop()  -> Result<(), String>
+//   event "mic:level"  -> { rmsDb: number }   (RMS in dBFS, ~ -60..0)
+//   event "mic:error"  -> { message: string } (human-readable failure)
+//
+// The TypeScript wrappers compile even if Rust hasn't shipped yet —
+// `invoke` is a free-form string-keyed bridge. At runtime a missing
+// command surfaces as a rejection that AssistantView already catches
+// and renders in the existing `error` banner.
+
+/** Payload of the `mic:level` event — current RMS in dBFS. */
+export interface MicLevel {
+  rmsDb: number;
+}
+
+/** Begin microphone capture in the Rust audio pipeline. */
+export async function micStart(): Promise<void> {
+  return invoke("mic_start");
+}
+
+/** Stop microphone capture and release the OS audio device. */
+export async function micStop(): Promise<void> {
+  return invoke("mic_stop");
+}

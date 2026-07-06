@@ -23,7 +23,6 @@ import {
   Mic,
   MicOff,
   Camera,
-  Send,
   StopCircle,
   Wifi,
   WifiOff,
@@ -34,6 +33,8 @@ import { useOverlayStore } from "../../lib/store";
 import { useRouter } from "../../lib/router";
 import { ChatStream } from "../../components/ChatStream";
 import { InputBar } from "../../components/InputBar";
+import { MicButton } from "../../components/MicButton";
+import { VuMeter } from "../../components/VuMeter";
 import { QuickActionChips, type QuickAction } from "../../components/QuickActionChips";
 import { RecordingPill } from "../../components/RecordingPill";
 import { HotkeyHintBar } from "../../components/HotkeyHintBar";
@@ -43,9 +44,11 @@ import {
   hideOverlay,
   aiStartLive,
   aiStopLive,
-  aiSendAudio,
   captureScreen,
+  micStart,
+  micStop,
   type CaptureMeta,
+  type MicLevel,
 } from "../../lib/tauri";
 import { CardShell } from "../../components/ui";
 import { cn } from "../../lib/utils";
@@ -57,18 +60,6 @@ interface ResponseChunk {
   id: string;
   text: string;
   at: number;
-}
-
-/** Build a 16 kB silent PCM chunk (16-bit mono, 16 kHz, ~0.5 s) and base64-encode it. */
-function buildSilentPcmBase64(): string {
-  // 8192 samples * 2 bytes = 16384 bytes
-  const samples = 8192;
-  const bytes = new Uint8Array(samples * 2); // all zeros = silence
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }
 
 export function AssistantView() {
@@ -90,6 +81,9 @@ export function AssistantView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastCapture, setLastCapture] = useState<CaptureMeta | null>(null);
+  // ---- Microphone capture ----
+  const [isMicRecording, setIsMicRecording] = useState(false);
+  const [micLevel, setMicLevel] = useState<number>(-Infinity);
   const unlistenRef = useRef<UnlistenFn[]>([]);
 
   // Listen for the main assist hotkey to switch to Assist mode.
@@ -202,6 +196,27 @@ export function AssistantView() {
       }),
     );
 
+    // mic:level — RMS audio level in dBFS from the Rust audio pipeline.
+    // Forwarded into the VuMeter. -Infinity is a valid sentinel for "silence".
+    safe(
+      listen<MicLevel>("mic:level", (e) => {
+        const v = e.payload?.rmsDb;
+        if (typeof v === "number") setMicLevel(v);
+      }),
+    );
+
+    // mic:error — surface capture failures (permission denied, device
+    // busy, etc.) into the existing error banner and clear the recording
+    // state so the button doesn't appear stuck on.
+    safe(
+      listen<{ message?: string }>("mic:error", (e) => {
+        const message =
+          e.payload?.message ?? "microphone error (no message)";
+        setError(`mic: ${message}`);
+        setIsMicRecording(false);
+      }),
+    );
+
     return () => {
       for (const fn of unlistens) {
         try {
@@ -244,6 +259,16 @@ export function AssistantView() {
     setError(null);
     setBusy(true);
     try {
+      // Ensure the mic is released whenever the live session ends.
+      if (isMicRecording) {
+        try {
+          await micStop();
+        } catch (err) {
+          console.error("micStop on session-stop failed:", err);
+        }
+        setIsMicRecording(false);
+        setMicLevel(-Infinity);
+      }
       await aiStopLive();
       setSessionActive(false);
       setLiveStatus("idle");
@@ -254,18 +279,7 @@ export function AssistantView() {
     } finally {
       setBusy(false);
     }
-  }, []);
-
-  const onSendDemoAudio = useCallback(async () => {
-    setError(null);
-    try {
-      const pcm = buildSilentPcmBase64();
-      await aiSendAudio(pcm);
-    } catch (err) {
-      console.error("aiSendAudio failed:", err);
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
+  }, [isMicRecording]);
 
   const onCapture = useCallback(async () => {
     setError(null);
@@ -278,6 +292,32 @@ export function AssistantView() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  }, []);
+
+  const onStartMic = useCallback(async () => {
+    setError(null);
+    try {
+      await micStart();
+      setIsMicRecording(true);
+      setMicLevel(-Infinity);
+    } catch (err) {
+      console.error("micStart failed:", err);
+      setError(err instanceof Error ? err.message : String(err));
+      setIsMicRecording(false);
+    }
+  }, []);
+
+  const onStopMic = useCallback(async () => {
+    setError(null);
+    try {
+      await micStop();
+    } catch (err) {
+      console.error("micStop failed:", err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsMicRecording(false);
+      setMicLevel(-Infinity);
     }
   }, []);
 
@@ -319,9 +359,10 @@ export function AssistantView() {
               {status === "thinking" && "Thinking…"}
             </span>
             <RecordingPill
-              active={status === "listening"}
-              label={activeChip === "recap" ? "Recording" : "Live"}
+              active={isMicRecording || status === "listening"}
+              label={isMicRecording ? "Mic" : activeChip === "recap" ? "Recording" : "Live"}
             />
+            <VuMeter level={micLevel} />
             <LiveStatusBadge status={liveStatus} message={statusMessage} />
           </div>
 
@@ -462,15 +503,19 @@ export function AssistantView() {
                 <Camera className="w-3.5 h-3.5" />
                 Take screenshot
               </button>
-              <button
-                onClick={onSendDemoAudio}
+              <MicButton
+                isRecording={isMicRecording}
+                onStart={onStartMic}
+                onStop={onStopMic}
                 disabled={!sessionActive || busy}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/60 transition-colors disabled:opacity-50"
-                title="Send a 16 kB silent PCM chunk to the live session"
-              >
-                <Send className="w-3.5 h-3.5" />
-                Send demo audio
-              </button>
+                title={
+                  !sessionActive
+                    ? "Start a Gemini Live session first"
+                    : isMicRecording
+                      ? "Stop microphone"
+                      : "Start microphone"
+                }
+              />
               {lastCapture && (
                 <span className="text-[10px] text-zinc-500 tabular-nums">
                   last capture: {lastCapture.width}×{lastCapture.height}
