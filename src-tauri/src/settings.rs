@@ -27,6 +27,8 @@ pub struct AppSettings {
     pub stealth_tier: String,
     pub ai_provider: String,
     pub hotkey_overrides: HashMap<String, String>,
+    /// Mic VAD: aggressive | balanced | manual
+    pub vad_mode: String,
 }
 
 impl Default for AppSettings {
@@ -45,6 +47,7 @@ impl Default for AppSettings {
             stealth_tier: "glass".to_string(),
             ai_provider: "gemini".to_string(),
             hotkey_overrides: HashMap::new(),
+            vad_mode: "balanced".to_string(),
         }
     }
 }
@@ -66,6 +69,7 @@ pub struct AppSettingsPublic {
     pub overlay_layout: String,
     pub stealth_tier: String,
     pub ai_provider: String,
+    pub vad_mode: String,
 }
 
 impl AppSettings {
@@ -83,6 +87,7 @@ impl AppSettings {
             overlay_layout: self.overlay_layout.clone(),
             stealth_tier: self.stealth_tier.clone(),
             ai_provider: self.ai_provider.clone(),
+            vad_mode: self.vad_mode.clone(),
         }
     }
 
@@ -101,6 +106,7 @@ impl AppSettings {
             s.stealth_tier = stored.stealth_tier;
             s.ai_provider = stored.ai_provider;
             s.hotkey_overrides = stored.hotkey_overrides;
+            s.vad_mode = stored.vad_mode;
         }
         if let Some(key) = crate::secrets::get_gemini_api_key()? {
             s.gemini_api_key = key;
@@ -128,6 +134,7 @@ pub struct SettingsPatch {
     pub overlay_layout: Option<String>,
     pub stealth_tier: Option<String>,
     pub ai_provider: Option<String>,
+    pub vad_mode: Option<String>,
 }
 
 impl SettingsPatch {
@@ -164,6 +171,9 @@ impl SettingsPatch {
         }
         if let Some(v) = self.ai_provider {
             s.ai_provider = v;
+        }
+        if let Some(v) = self.vad_mode {
+            s.vad_mode = v;
         }
         s
     }

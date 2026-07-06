@@ -17,6 +17,8 @@ export interface DbProfile {
   system_prompt: string;
   is_builtin: boolean;
   position: number;
+  max_words: number;
+  tone: string;
   created_at: number;
   updated_at: number;
 }

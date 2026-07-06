@@ -14,8 +14,11 @@ use crate::error::Result;
 
 pub mod captures;
 pub mod conversations;
+pub mod export;
 pub mod messages;
 pub mod profiles;
+pub mod vault;
+pub mod wipe;
 
 /// Managed state handed to Tauri via `app.manage(DbState(...))`.
 ///
@@ -45,7 +48,59 @@ pub fn open(path: &Path) -> Result<Connection> {
 /// safe to call on every startup.
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(SCHEMA_SQL)?;
+    migrate_v2(conn)?;
+    migrate_vault(conn)?;
     log::info!("database migrations applied");
+    Ok(())
+}
+
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let sql = format!("PRAGMA table_info({table})");
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<()> {
+    if column_exists(conn, table, column)? {
+        return Ok(());
+    }
+    let sql = format!("ALTER TABLE {table} ADD COLUMN {column} {definition}");
+    conn.execute(&sql, [])?;
+    log::info!("db migration: added {table}.{column}");
+    Ok(())
+}
+
+/// Profile tone / max_words (Sprint C).
+fn migrate_v2(conn: &Connection) -> Result<()> {
+    add_column_if_missing(conn, "profiles", "max_words", "INTEGER NOT NULL DEFAULT 120")?;
+    add_column_if_missing(conn, "profiles", "tone", "TEXT NOT NULL DEFAULT 'neutral'")?;
+    Ok(())
+}
+
+fn migrate_vault(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS vault_chunks (
+  id          TEXT PRIMARY KEY,
+  source_path TEXT NOT NULL,
+  chunk_text  TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vault_source ON vault_chunks(source_path);
+"#,
+    )?;
     Ok(())
 }
 

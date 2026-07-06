@@ -48,6 +48,8 @@ import {
   captureScreen,
   micStart,
   micStop,
+  dualBrainStep,
+  onSpeakable,
   createConversation,
   getSettings,
   setOverlayLayout,
@@ -57,6 +59,7 @@ import {
 } from "../../lib/tauri";
 import { CompactPill } from "../../components/CompactPill";
 import { ScreenshotTray } from "../../components/ScreenshotTray";
+import { TeleprompterStrip } from "../../components/TeleprompterStrip";
 import { CardShell } from "../../components/ui";
 import { cn } from "../../lib/utils";
 
@@ -89,6 +92,9 @@ export function AssistantView() {
   const setResponseIndex = useOverlayStore((s) => s.setResponseIndex);
   const responseSnapshots = useOverlayStore((s) => s.responseSnapshots);
   const responseIndex = useOverlayStore((s) => s.responseIndex);
+  const speakableText = useOverlayStore((s) => s.speakableText);
+  const setSpeakableText = useOverlayStore((s) => s.setSpeakableText);
+  const appendMessage = useOverlayStore((s) => s.appendMessage);
   const updateLastMessage = useOverlayStore((s) => s.updateLastMessage);
   const setView = useRouter((s) => s.setView);
 
@@ -107,6 +113,10 @@ export function AssistantView() {
   // ---- Microphone capture ----
   const [isMicRecording, setIsMicRecording] = useState(false);
   const [micLevel, setMicLevel] = useState<number>(-Infinity);
+  const [vadMode, setVadMode] = useState<"aggressive" | "balanced" | "manual">(
+    "balanced",
+  );
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const unlistenRef = useRef<UnlistenFn[]>([]);
   const sessionActiveRef = useRef(false);
   const onCaptureRef = useRef<(() => Promise<void>) | null>(null);
@@ -229,6 +239,8 @@ export function AssistantView() {
       }),
     );
 
+    safe(onSpeakable((text) => setSpeakableText(text)));
+
     return () => {
       for (const fn of unlistens) {
         try {
@@ -239,7 +251,16 @@ export function AssistantView() {
       }
       unlistenRef.current = [];
     };
-  }, [appendAssistantStreamChunk, setStreaming, pushResponseSnapshot, addScreenshotToTray]);
+  }, [appendAssistantStreamChunk, setStreaming, pushResponseSnapshot, addScreenshotToTray, setSpeakableText]);
+
+  useEffect(() => {
+    getSettings()
+      .then((s) => {
+        setVadMode(s.vadMode ?? "balanced");
+        setActiveProfileId(s.activeProfileId ?? null);
+      })
+      .catch(console.error);
+  }, []);
 
   // ---- Phase 4: Action handlers ----
 
@@ -248,6 +269,7 @@ export function AssistantView() {
     setBusy(true);
     try {
       const settings = await getSettings();
+      setActiveProfileId(settings.activeProfileId ?? null);
       const conv = await createConversation(settings.activeProfileId ?? null);
       setConversationId(conv.id);
       await aiStartLiveConfigured(conv.id);
@@ -319,8 +341,51 @@ export function AssistantView() {
     }
   }, [addScreenshotToTray]);
 
+  const onDualBrainStep = useCallback(async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const tray = useOverlayStore.getState().screenshotTray;
+      const trayNote =
+        tray.length > 0
+          ? tray
+              .map((m) => `- screenshot ${m.width}×${m.height} (${m.id})`)
+              .join("\n")
+          : "(screenshot tray empty — dual-brain will capture fresh screen)";
+      const result = await dualBrainStep({
+        liveTranscript: transcript,
+        extraContext: trayNote,
+        profileId: activeProfileId,
+      });
+      setSpeakableText(result.speakable);
+      pushResponseSnapshot(result.speakable);
+      appendMessage({
+        id: `dual-${Date.now()}`,
+        role: "assistant",
+        content: result.speakable,
+        createdAt: Date.now(),
+      });
+      addScreenshotToTray(result.capture);
+      setLastCapture(result.capture);
+    } catch (err) {
+      console.error("dualBrainStep failed:", err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    activeProfileId,
+    addScreenshotToTray,
+    appendMessage,
+    pushResponseSnapshot,
+    setSpeakableText,
+    transcript,
+  ]);
+
+  const onDualBrainRef = useRef<(() => Promise<void>) | null>(null);
   onCaptureRef.current = onCapture;
   onStartSessionRef.current = onStartSession;
+  onDualBrainRef.current = onDualBrainStep;
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -328,7 +393,7 @@ export function AssistantView() {
       if (action === "next_step") {
         setActiveChip("assist");
         if (sessionActiveRef.current) {
-          void onCaptureRef.current?.();
+          void onDualBrainRef.current?.();
         } else {
           void onStartSessionRef.current?.();
         }
@@ -551,7 +616,16 @@ export function AssistantView() {
         </div>
 
         {/* Response area */}
-        <div className="flex-1 min-h-0 px-4">
+        <div className="flex-1 min-h-0 px-4 flex flex-col gap-2 min-h-0">
+          {speakableText ? (
+            <TeleprompterStrip text={speakableText} className="shrink-0" />
+          ) : null}
+          {responseSnapshots.length > 1 && (
+            <div className="shrink-0 text-[10px] text-zinc-500 tabular-nums">
+              Response {responseIndex + 1} / {responseSnapshots.length}
+              <span className="text-zinc-600 ml-1">(⌘← ⌘→)</span>
+            </div>
+          )}
           <ChatStream mode={activeChip} />
         </div>
 
@@ -632,6 +706,7 @@ export function AssistantView() {
                 onStart={onStartMic}
                 onStop={onStopMic}
                 disabled={!sessionActive || busy}
+                vadMode={vadMode}
                 title={
                   !sessionActive
                     ? "Start a Gemini Live session first"

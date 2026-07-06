@@ -7,5 +7,6 @@
 
 pub mod gemini_live;
 pub mod groq;
+pub mod dual_brain;
 
 pub use gemini_live::GeminiLiveClient;

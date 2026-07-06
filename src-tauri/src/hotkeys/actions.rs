@@ -190,6 +190,13 @@ fn move_window(app: &AppHandle, direction: &str) -> Result<()> {
 fn emergency_erase(app: &AppHandle) -> Result<()> {
     log::warn!("EMERGENCY ERASE triggered");
 
+    if let Some(db) = app.try_state::<crate::db::DbState>() {
+        let guard = db.0.lock().expect("db mutex poisoned");
+        if let Err(e) = crate::db::wipe::wipe_local_data(&guard) {
+            log::warn!("emergency erase db wipe failed: {e:#}");
+        }
+    }
+
     // 1. Hide the overlay window immediately
     let _ = helpers::hide(app);
 

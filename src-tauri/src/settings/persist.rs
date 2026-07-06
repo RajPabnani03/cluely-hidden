@@ -35,6 +35,12 @@ pub struct StoredSettings {
     pub ai_provider: String,
     #[serde(default)]
     pub hotkey_overrides: HashMap<String, String>,
+    #[serde(default = "default_vad_mode")]
+    pub vad_mode: String,
+}
+
+fn default_vad_mode() -> String {
+    "balanced".to_string()
 }
 
 fn default_overlay_layout() -> String {
@@ -68,6 +74,7 @@ impl From<&AppSettings> for StoredSettings {
             stealth_tier: s.stealth_tier.clone(),
             ai_provider: s.ai_provider.clone(),
             hotkey_overrides: s.hotkey_overrides.clone(),
+            vad_mode: s.vad_mode.clone(),
         }
     }
 }

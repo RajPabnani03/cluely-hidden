@@ -199,8 +199,10 @@ pub fn update_profile(
     id: String,
     name: Option<String>,
     system_prompt: Option<String>,
+    max_words: Option<i32>,
+    tone: Option<String>,
 ) -> Result<crate::db::profiles::Profile> {
-    crate::db::profiles::update(&conn(&state), &id, name, system_prompt)
+    crate::db::profiles::update(&conn(&state), &id, name, system_prompt, max_words, tone)
 }
 
 #[tauri::command]
@@ -551,4 +553,95 @@ pub async fn mic_stop(
     *guard = None; // drop MicCapture → stream stops
     log::info!("mic_stop: capture handle dropped");
     Ok(())
+}
+
+/// Push-to-talk gate for `vad_mode = manual`.
+pub struct MicGateState(pub std::sync::atomic::AtomicBool);
+
+impl Default for MicGateState {
+    fn default() -> Self {
+        MicGateState(std::sync::atomic::AtomicBool::new(false))
+    }
+}
+
+#[tauri::command]
+pub fn set_mic_gate(open: bool, gate: tauri::State<'_, MicGateState>) -> std::result::Result<(), String> {
+    gate.0.store(open, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}
+
+// ---- Sprint C — dual brain ----
+
+#[tauri::command]
+pub async fn dual_brain_step(
+    app: AppHandle,
+    settings_state: tauri::State<'_, SettingsState>,
+    db_state: tauri::State<'_, DbState>,
+    live_transcript: String,
+    extra_context: String,
+    profile_id: Option<String>,
+) -> std::result::Result<crate::ai::dual_brain::DualBrainResult, String> {
+    let settings = settings_state.get();
+    let profile = {
+        let guard = conn(&db_state);
+        resolve_profile(&guard, profile_id.or(settings.active_profile_id.clone()))?
+    };
+    crate::ai::dual_brain::dual_brain_step(
+        &app,
+        &settings,
+        &profile,
+        &live_transcript,
+        &extra_context,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+// ---- Sprint D — export / wipe ----
+
+#[tauri::command]
+pub fn export_conversation_markdown(
+    state: tauri::State<'_, DbState>,
+    conversation_id: String,
+) -> Result<String> {
+    crate::db::export::export_markdown(&conn(&state), &conversation_id)
+}
+
+#[tauri::command]
+pub fn wipe_local_data(state: tauri::State<'_, DbState>) -> Result<()> {
+    crate::db::wipe::wipe_local_data(&conn(&state))
+}
+
+// ---- Sprint E — vault / calendar ----
+
+#[tauri::command]
+pub fn vault_index_folder(
+    state: tauri::State<'_, DbState>,
+    folder_path: String,
+) -> Result<usize> {
+    let path = expand_user_path(&folder_path);
+    crate::db::vault::index_folder(&conn(&state), &path)
+}
+
+fn expand_user_path(p: &str) -> std::path::PathBuf {
+    if let Some(rest) = p.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest);
+        }
+    }
+    std::path::PathBuf::from(p)
+}
+
+#[tauri::command]
+pub fn vault_query(
+    state: tauri::State<'_, DbState>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<crate::db::vault::VaultHit>> {
+    crate::db::vault::query(&conn(&state), &query, limit.unwrap_or(8))
+}
+
+#[tauri::command]
+pub fn calendar_hints(limit: Option<usize>) -> Result<Vec<crate::calendar::CalendarHint>> {
+    crate::calendar::upcoming_hints(limit.unwrap_or(5))
 }

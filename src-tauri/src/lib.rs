@@ -3,6 +3,7 @@
 //! Wires Tauri plugins, registers IPC commands, creates the overlay window,
 //! and installs the global hotkey + tray icon.
 
+mod calendar;
 mod config;
 mod db;
 mod error;
@@ -22,7 +23,7 @@ use crate::window::overlay;
 use crate::window::tray;
 use crate::settings::SettingsState;
 use crate::db::DbState;
-use crate::ipc::commands::{AiState, MicState};
+use crate::ipc::commands::{AiState, MicGateState, MicState};
 
 pub fn run() {
     // Initialize logging (controlled by RUST_LOG env var)
@@ -48,6 +49,7 @@ pub fn run() {
         .manage(crate::window::OverlayChromeState::default())
         .manage(AiState::default())
         .manage(MicState::default())
+        .manage(MicGateState::default())
         // ---------- Setup ----------
         .setup(|app| {
             // ---------- Phase 3A — Database ----------
@@ -149,6 +151,13 @@ pub fn run() {
             // ---- Phase 6 — Microphone capture pipeline ----
             ipc::commands::mic_start,
             ipc::commands::mic_stop,
+            ipc::commands::set_mic_gate,
+            ipc::commands::dual_brain_step,
+            ipc::commands::export_conversation_markdown,
+            ipc::commands::wipe_local_data,
+            ipc::commands::vault_index_folder,
+            ipc::commands::vault_query,
+            ipc::commands::calendar_hints,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

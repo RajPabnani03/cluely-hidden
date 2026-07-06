@@ -38,6 +38,7 @@ rg -i 'AIza[0-9A-Za-z_-]{20,}|sk-[a-zA-Z0-9]{20,}' --glob '!node_modules' .
 - [x] Persist Gemini key in **macOS Keychain**, not plaintext JSON
 - [x] `get_settings` returns `geminiApiKeyConfigured: boolean` instead of the raw key
 - [ ] Redact query strings in WebSocket error logs
+- [x] Emergency erase wipes SQLite + capture files (hotkey + `wipe_local_data`)
 - [ ] Optional: GitHub Actions secret scanning on PRs
 
 See also [`CHANGELOG.md`](./CHANGELOG.md) upgrade notes.

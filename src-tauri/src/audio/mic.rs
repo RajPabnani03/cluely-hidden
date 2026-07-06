@@ -10,7 +10,8 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::error::CaptureError;
-use crate::ipc::commands::{ai_send_audio_impl, AiState};
+use crate::ipc::commands::{ai_send_audio_impl, AiState, MicGateState};
+use crate::settings::SettingsState;
 
 const TARGET_RATE: u32 = 24_000;
 const SAMPLES_PER_CHUNK: usize = (TARGET_RATE / 10) as usize;
@@ -253,10 +254,20 @@ async fn run_drain(
             }
 
             let rms = rms_dbfs(&pcm_f32);
-            let mut pcm_bytes = Vec::with_capacity(BYTES_PER_CHUNK);
-            f32_to_s16le_bytes(&pcm_f32, &mut pcm_bytes);
 
-            let _ = ai_send_audio_impl(ai_handle.clone(), pcm_bytes).await;
+            let settings = app.state::<SettingsState>().get();
+            let gate = app.state::<MicGateState>();
+            let should_send = match settings.vad_mode.as_str() {
+                "aggressive" => rms > -42.0,
+                "manual" => gate.0.load(std::sync::atomic::Ordering::SeqCst),
+                _ => rms > -50.0,
+            };
+
+            if should_send {
+                let mut pcm_bytes = Vec::with_capacity(BYTES_PER_CHUNK);
+                f32_to_s16le_bytes(&pcm_f32, &mut pcm_bytes);
+                let _ = ai_send_audio_impl(ai_handle.clone(), pcm_bytes).await;
+            }
             let _ = app.emit("mic:level", MicLevel { rms_db: rms });
         }
     }

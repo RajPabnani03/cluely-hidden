@@ -17,6 +17,9 @@ import {
   updateProfile,
   createProfile,
   deleteProfile,
+  wipeLocalData,
+  vaultIndexFolder,
+  calendarHints,
 } from "../../lib/tauri";
 import { HotkeyRebindSection } from "../../components/HotkeyRebindSection";
 import { useOverlayStore } from "../../lib/store";
@@ -33,6 +36,7 @@ export function SettingsView() {
   const [activeTab, setActiveTab] = useState<"general" | "profiles" | "model" | "hotkeys">("general");
   const [status, setStatus] = useState("");
   const [geminiKeyDraft, setGeminiKeyDraft] = useState("");
+  const [vaultPath, setVaultPath] = useState("");
 
   useEffect(() => {
     Promise.all([getSettings(), listProfiles()])
@@ -180,6 +184,96 @@ export function SettingsView() {
                   />
                 </Row>
               </Section>
+              <Section title="Microphone VAD">
+                <p className="text-[11px] text-zinc-500 mb-2">
+                  Controls when mic audio is sent during Live. Manual = hold mic button while speaking.
+                </p>
+                <SegmentedControl
+                  value={settings.vadMode ?? "balanced"}
+                  options={[
+                    { value: "aggressive", label: "Aggressive" },
+                    { value: "balanced", label: "Balanced" },
+                    { value: "manual", label: "Manual" },
+                  ]}
+                  onChange={(v) =>
+                    applySettings({
+                      vadMode: v as AppSettings["vadMode"],
+                    })
+                  }
+                />
+              </Section>
+              <Section title="Data & privacy">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        "Erase all local conversations, messages, captures, and vault index? This cannot be undone.",
+                      )
+                    ) {
+                      return;
+                    }
+                    try {
+                      await wipeLocalData();
+                      useOverlayStore.getState().resetSensitiveState();
+                      flash("Local data erased");
+                    } catch (err) {
+                      console.error(err);
+                      flash("Erase failed — see console");
+                    }
+                  }}
+                  className="w-full py-2 rounded-lg text-xs font-medium text-red-300 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors"
+                >
+                  Erase local data (emergency)
+                </button>
+                <div className="mt-3 space-y-2">
+                  <label className="text-[11px] text-zinc-500">RAG vault folder (plain .txt / .md)</label>
+                  <input
+                    value={vaultPath}
+                    onChange={(e) => setVaultPath(e.target.value)}
+                    placeholder="~/Documents/notes"
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1.5 text-xs text-zinc-200 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const p = vaultPath.trim();
+                      if (!p) return;
+                      try {
+                        const n = await vaultIndexFolder(p);
+                        flash(`Indexed ${n} chunks`);
+                      } catch (err) {
+                        console.error(err);
+                        flash("Vault index failed");
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-md text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+                  >
+                    Index vault folder
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const hints = await calendarHints(5);
+                      if (hints.length === 0) {
+                        flash("No calendar hints (grant Calendar access on macOS)");
+                        return;
+                      }
+                      flash(
+                        hints.map((h) => `${h.start}: ${h.summary}`).join(" · "),
+                      );
+                    } catch (err) {
+                      console.error(err);
+                      flash("Calendar unavailable");
+                    }
+                  }}
+                  className="mt-2 w-full py-2 rounded-lg text-xs text-zinc-300 bg-zinc-800/60 border border-zinc-700/60 hover:bg-zinc-800"
+                >
+                  Preview calendar hints
+                </button>
+              </Section>
               <Section title="Toggle hotkey">
                 <Row label="Show / hide overlay">
                   <kbd className="font-mono text-xs bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-200">
@@ -314,8 +408,23 @@ function ProfileSection({
     onStatus("Profile created");
   };
 
-  const onUpdate = async (id: string, name: string, prompt: string) => {
-    await updateProfile(id, name, prompt);
+  const onUpdate = async (
+    id: string,
+    patch: {
+      name?: string;
+      prompt?: string;
+      maxWords?: number;
+      tone?: string;
+    },
+  ) => {
+    const p = profiles.find((x) => x.id === id);
+    await updateProfile(
+      id,
+      patch.name ?? p?.name,
+      patch.prompt ?? p?.system_prompt,
+      patch.maxWords ?? p?.max_words ?? 120,
+      patch.tone ?? p?.tone ?? "neutral",
+    );
     await reload();
     onStatus("Profile updated");
   };
@@ -361,8 +470,29 @@ function ProfileSection({
               defaultValue={p.system_prompt}
               rows={4}
               className="mt-2 w-full bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1.5 text-[11px] text-zinc-300 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-500"
-              onBlur={(e) => onUpdate(p.id, p.name, e.target.value)}
+              onBlur={(e) => onUpdate(p.id, { prompt: e.target.value })}
             />
+            <div className="mt-2 flex flex-wrap gap-2 items-center">
+              <label className="text-[10px] text-zinc-500">Max words</label>
+              <input
+                type="number"
+                min={40}
+                max={400}
+                defaultValue={p.max_words ?? 120}
+                className="w-20 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
+                onBlur={(e) =>
+                  onUpdate(p.id, { maxWords: Number(e.target.value) || 120 })
+                }
+              />
+              <label className="text-[10px] text-zinc-500 ml-2">Tone</label>
+              <input
+                type="text"
+                defaultValue={p.tone ?? "neutral"}
+                placeholder="e.g. confident, warm"
+                className="flex-1 min-w-[120px] bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
+                onBlur={(e) => onUpdate(p.id, { tone: e.target.value })}
+              />
+            </div>
             {!p.is_builtin && (
               <button
                 onClick={() => onDelete(p.id)}

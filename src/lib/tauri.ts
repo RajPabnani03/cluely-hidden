@@ -61,6 +61,7 @@ export interface AppSettings {
   overlayLayout: "full" | "compact";
   stealthTier: string;
   aiProvider: "gemini" | "groq";
+  vadMode: "aggressive" | "balanced" | "manual";
 }
 
 /** Patch for update_settings — include geminiApiKey only when setting/changing the key. */
@@ -257,8 +258,10 @@ export async function updateProfile(
   id: string,
   name: string | undefined,
   systemPrompt: string | undefined,
+  maxWords?: number,
+  tone?: string,
 ): Promise<DbProfile> {
-  return invoke("update_profile", { id, name, systemPrompt });
+  return invoke("update_profile", { id, name, systemPrompt, maxWords, tone });
 }
 
 export async function deleteProfile(id: string): Promise<void> {
@@ -430,4 +433,67 @@ export async function micStart(): Promise<void> {
 /** Stop microphone capture and release the OS audio device. */
 export async function micStop(): Promise<void> {
   return invoke("mic_stop");
+}
+
+export async function setMicGate(open: boolean): Promise<void> {
+  return invoke("set_mic_gate", { open });
+}
+
+export interface DualBrainResult {
+  speakable: string;
+  capture: CaptureMeta;
+}
+
+/** Sprint C: capture + flash speakable answer while Live is active. */
+export async function dualBrainStep(args: {
+  liveTranscript: string;
+  extraContext: string;
+  profileId?: string | null;
+}): Promise<DualBrainResult> {
+  return invoke("dual_brain_step", {
+    liveTranscript: args.liveTranscript,
+    extraContext: args.extraContext,
+    profileId: args.profileId ?? null,
+  });
+}
+
+export async function exportConversationMarkdown(
+  conversationId: string,
+): Promise<string> {
+  return invoke("export_conversation_markdown", { conversationId });
+}
+
+export async function wipeLocalData(): Promise<void> {
+  return invoke("wipe_local_data");
+}
+
+export interface VaultHit {
+  sourcePath: string;
+  chunkText: string;
+}
+
+export async function vaultIndexFolder(folderPath: string): Promise<number> {
+  return invoke("vault_index_folder", { folderPath });
+}
+
+export async function vaultQuery(
+  query: string,
+  limit?: number,
+): Promise<VaultHit[]> {
+  return invoke("vault_query", { query, limit });
+}
+
+export interface CalendarHint {
+  summary: string;
+  start: string;
+}
+
+export async function calendarHints(limit?: number): Promise<CalendarHint[]> {
+  return invoke("calendar_hints", { limit });
+}
+
+export async function onSpeakable(
+  handler: (text: string) => void,
+): Promise<UnlistenFn> {
+  return listen<string>("ai:speakable", (e) => handler(e.payload));
 }

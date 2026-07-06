@@ -26,6 +26,7 @@ interface OverlayState {
   screenshotTray: import("./tauri").CaptureMeta[];
   responseSnapshots: string[];
   responseIndex: number;
+  speakableText: string;
 
   setVisible: (v: boolean) => void;
   toggleVisible: () => void;
@@ -40,6 +41,7 @@ interface OverlayState {
   clearScreenshotTray: () => void;
   pushResponseSnapshot: (text: string) => void;
   setResponseIndex: (index: number) => void;
+  setSpeakableText: (text: string) => void;
   setConversationTitle: (title: string) => Promise<void>;
   appendMessage: (msg: ChatMessage) => void;
   updateLastMessage: (content: string) => void;
@@ -64,6 +66,7 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
   screenshotTray: [],
   responseSnapshots: [],
   responseIndex: 0,
+  speakableText: "",
 
   setVisible: (v) => set({ visible: v }),
   toggleVisible: () => set((s) => ({ visible: !s.visible })),
@@ -97,6 +100,7 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
       const i = Math.max(0, Math.min(index, s.responseSnapshots.length - 1));
       return { responseIndex: i };
     }),
+  setSpeakableText: (text) => set({ speakableText: text }),
   setStreaming: (streaming) => set({ streaming }),
   setConversationId: (id) => set({ currentConversationId: id }),
   setConversationTitle: async (title) => {
@@ -161,6 +165,7 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
       screenshotTray: [],
       responseSnapshots: [],
       responseIndex: 0,
+      speakableText: "",
     }),
 }));
 

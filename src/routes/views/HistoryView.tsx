@@ -30,7 +30,9 @@ import {
   listConversations,
   listMessages,
   listProfiles,
+  exportConversationMarkdown,
 } from "../../lib/tauri";
+import { SessionTimeline } from "../../components/SessionTimeline";
 import { useOverlayStore } from "../../lib/store";
 import { useRouter } from "../../lib/router";
 import { formatRelativeTime, cn } from "../../lib/utils";
@@ -50,6 +52,8 @@ export function HistoryView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [timelineId, setTimelineId] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
 
@@ -160,6 +164,19 @@ export function HistoryView() {
       return contentHit;
     });
   }, [rows, query]);
+
+  const onExportMd = async (row: Row) => {
+    setExportStatus(null);
+    try {
+      const md = await exportConversationMarkdown(row.conversation.id);
+      await navigator.clipboard.writeText(md);
+      setExportStatus("Markdown copied to clipboard");
+      window.setTimeout(() => setExportStatus(null), 2000);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   // ---------- Actions ----------
 
@@ -276,6 +293,34 @@ export function HistoryView() {
             </div>
           )}
 
+          {exportStatus && (
+            <div className="text-[11px] text-emerald-400 px-4">{exportStatus}</div>
+          )}
+
+          {timelineId && (
+            <div className="px-4 pb-2">
+              {(() => {
+                const row = rows.find((r) => r.conversation.id === timelineId);
+                if (!row) return null;
+                return (
+                  <div className="rounded-lg border border-zinc-700 bg-zinc-950/80 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-zinc-300">Session timeline</span>
+                      <button
+                        type="button"
+                        onClick={() => setTimelineId(null)}
+                        className="text-[10px] text-zinc-500 hover:text-zinc-300"
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <SessionTimeline messages={row.messages} />
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-sm text-zinc-500">Loading conversations…</p>
@@ -306,6 +351,12 @@ export function HistoryView() {
                   isOpening={openingId === row.conversation.id}
                   onOpen={onOpen}
                   onDelete={setPendingDelete}
+                  onTimeline={() =>
+                    setTimelineId((id) =>
+                      id === row.conversation.id ? null : row.conversation.id,
+                    )
+                  }
+                  onExport={() => void onExportMd(row)}
                 />
               ))}
             </ul>
@@ -332,11 +383,15 @@ function ConversationRow({
   isOpening,
   onOpen,
   onDelete,
+  onTimeline,
+  onExport,
 }: {
   row: Row;
   isOpening: boolean;
   onOpen: (row: Row) => void;
   onDelete: (row: Row) => void;
+  onTimeline: () => void;
+  onExport: () => void;
 }) {
   const title = row.conversation.title ?? "Untitled conversation";
   return (
@@ -374,13 +429,35 @@ function ConversationRow({
           </p>
         )}
       </button>
-      <button
+      <div className="shrink-0 flex flex-col gap-1 self-start">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTimeline();
+          }}
+          className="text-[10px] text-zinc-400 hover:text-zinc-200 px-2 py-0.5 rounded border border-zinc-700/60"
+        >
+          Timeline
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onExport();
+          }}
+          className="text-[10px] text-zinc-400 hover:text-zinc-200 px-2 py-0.5 rounded border border-zinc-700/60"
+        >
+          Export MD
+        </button>
+        <button
         onClick={() => onDelete(row)}
         className="shrink-0 self-start mt-0.5 inline-flex items-center gap-1 text-[11px] text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
         aria-label="Delete conversation"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
+      </div>
     </li>
   );
 }
