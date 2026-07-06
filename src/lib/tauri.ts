@@ -272,3 +272,50 @@ export async function saveMessage(args: {
 
 // ---------- DB: Captures (typed for Phase 4 — no wrapper yet) ----------
 // export async function listCaptures(): Promise<DbCapture[]> { ... }
+
+// ---------- HistoryView helpers (Phase 3D) ----------
+//
+// Convenience wrappers used by HistoryView. The underlying commands
+// (`list_conversations`, `delete_conversation`, `list_messages`,
+// `get_profile`) all live in src-tauri/src/ipc/commands.rs and are
+// already exposed above as `listConversations`, `deleteConversation`,
+// `listMessages`, and `getProfile`.
+//
+// `searchConversations` is the one new entry point. It is implemented as
+// a client-side filter over `listConversations` + per-row `listMessages`.
+// There is intentionally no Rust `search_conversations` command yet —
+// SQLite FTS5 can be added later in Phase 4+ without changing call sites.
+
+/**
+ * Find conversations whose title OR message content matches `query`.
+ * Case-insensitive substring match. Empty query returns everything.
+ */
+export async function searchConversations(
+  query: string,
+): Promise<DbConversation[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return listConversations();
+  const q = trimmed.toLowerCase();
+  const conversations = await listConversations();
+  const matches: DbConversation[] = [];
+  for (const c of conversations) {
+    if ((c.title ?? "").toLowerCase().includes(q)) {
+      matches.push(c);
+      continue;
+    }
+    try {
+      const msgs = await listMessages(c.id);
+      if (msgs.some((m) => (m.content ?? "").toLowerCase().includes(q))) {
+        matches.push(c);
+      }
+    } catch {
+      // Skip conversations whose messages cannot be loaded.
+    }
+  }
+  return matches;
+}
+
+// Shape aliases — keep view code readable. These match the Db* types exactly.
+export type Conversation = DbConversation;
+export type Message = DbMessage;
+export type Profile = DbProfile;

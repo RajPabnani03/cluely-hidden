@@ -1,9 +1,15 @@
 import { create } from "zustand";
 import {
   type ChatMessage,
+  type DbConversation,
+  type DbMessage,
   type HotkeyBindings,
   type HotkeyActionId,
+  deleteConversation,
   getHotkeyBindings,
+  listConversations,
+  listMessages,
+  searchConversations,
   updateConversationTitle,
 } from "./tauri";
 
@@ -83,3 +89,77 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
 }));
 
 export type { HotkeyActionId };
+
+// ---------- HistoryView slice (Phase 3D) ----------
+//
+// A thin second store that powers HistoryView's list/search/delete flow.
+// Kept separate from useOverlayStore so the AssistantView is unaffected.
+
+interface HistoryState {
+  conversations: DbConversation[];
+  loading: boolean;
+  error: string | null;
+
+  /** Re-fetch every conversation from SQLite. */
+  loadConversations: () => Promise<void>;
+  /** Filter conversations by title or message content. */
+  searchConversations: (query: string) => Promise<void>;
+  /** Delete a conversation and refresh the list. */
+  deleteConversation: (id: string) => Promise<void>;
+  /** Fetch all messages for a conversation (used when opening it). */
+  getConversationMessages: (id: string) => Promise<DbMessage[]>;
+}
+
+export const useHistoryStore = create<HistoryState>((set) => ({
+  conversations: [],
+  loading: false,
+  error: null,
+
+  loadConversations: async () => {
+    set({ loading: true, error: null });
+    try {
+      const conversations = await listConversations();
+      set({ conversations, loading: false });
+    } catch (err) {
+      console.error("loadConversations failed:", err);
+      set({
+        error: err instanceof Error ? err.message : String(err),
+        loading: false,
+      });
+    }
+  },
+
+  searchConversations: async (query: string) => {
+    set({ loading: true, error: null });
+    try {
+      const conversations = await searchConversations(query);
+      set({ conversations, loading: false });
+    } catch (err) {
+      console.error("searchConversations failed:", err);
+      set({
+        error: err instanceof Error ? err.message : String(err),
+        loading: false,
+      });
+    }
+  },
+
+  deleteConversation: async (id: string) => {
+    set({ error: null });
+    try {
+      await deleteConversation(id);
+      set((s) => ({
+        conversations: s.conversations.filter((c) => c.id !== id),
+      }));
+    } catch (err) {
+      console.error("history.deleteConversation failed:", err);
+      set({
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+  },
+
+  getConversationMessages: async (id: string) => {
+    return listMessages(id);
+  },
+}));
