@@ -71,6 +71,8 @@ See [`CHANGELOG.md`](./CHANGELOG.md).
 
 **Security:** API keys and signing credentials stay on your machine only — see [`SECURITY.md`](./SECURITY.md).
 
+**Vision & backlog:** [`VISION.md`](./VISION.md) · [`ROADMAP.md`](./ROADMAP.md) (Pluely-inspired + dual-brain roadmap).
+
 ---
 
 ## License
