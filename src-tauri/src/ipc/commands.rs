@@ -2,7 +2,7 @@
 //! via `invoke('name', args)`. Keep them thin — delegate to the appropriate
 //! module.
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 use crate::db::DbState;
 use crate::error::Result;
@@ -251,4 +251,126 @@ pub fn get_capture(
     id: String,
 ) -> Result<Option<crate::db::captures::Capture>> {
     crate::db::captures::get(&conn(&state), &id)
+}
+
+// ---------- Phase 5 — AI Live WebSocket session ----------
+//
+// Thin IPC wrappers around `crate::ai::GeminiLiveClient`. The
+// connection is held in shared `AiState` (a `Mutex<Option<...>>`)
+// so that the React frontend can `start` once, push audio chunks
+// continuously, and `stop` on shutdown.
+
+use base64::Engine as _;
+use crate::ai::GeminiLiveClient;
+
+/// Shared handle for the live Gemini session. `None` when idle.
+pub struct AiState(pub std::sync::Mutex<Option<GeminiLiveClient>>);
+
+impl Default for AiState {
+    fn default() -> Self {
+        AiState(std::sync::Mutex::new(None))
+    }
+}
+
+/// Open a new Gemini Live session and stash the handle in
+/// `AiState`. Errors are surfaced to the frontend as strings.
+#[tauri::command]
+pub async fn ai_start_live(
+    app: AppHandle,
+    state: tauri::State<'_, AiState>,
+    api_key: String,
+    system_instruction: String,
+) -> std::result::Result<(), String> {
+    let client = GeminiLiveClient::connect(&app, &api_key, &system_instruction)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Lock the (sync) mutex — these are quick operations and won't
+    // block for long, even though `start` itself is async.
+    let mut guard = state.0.lock().expect("ai mutex poisoned");
+    *guard = Some(client);
+    Ok(())
+}
+
+/// Forward a base64-encoded 24 kHz / mono PCM chunk to Gemini Live.
+#[tauri::command]
+pub async fn ai_send_audio(
+    state: tauri::State<'_, AiState>,
+    pcm_base64: String,
+) -> std::result::Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(pcm_base64.as_bytes())
+        .map_err(|e| format!("invalid base64 payload: {e}"))?;
+
+    // Clone the client (it's Arc-backed internally so this is cheap)
+    // out of the mutex before awaiting. The client itself is Clone
+    // because all its fields are.
+    let client = {
+        let guard = state.0.lock().expect("ai mutex poisoned");
+        guard
+            .as_ref()
+            .ok_or_else(|| "ai session not started".to_string())?
+            .clone()
+    };
+
+    client
+        .send_audio_chunk(&bytes)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Close the active Gemini Live session (if any).
+#[tauri::command]
+pub async fn ai_stop_live(state: tauri::State<'_, AiState>) -> std::result::Result<(), String> {
+    // Take the client out of the mutex first to avoid holding a
+    // non-Send MutexGuard across an `.await`.
+    let client = {
+        let mut guard = state.0.lock().expect("ai mutex poisoned");
+        guard.take()
+    };
+    if let Some(client) = client {
+        client.close().await.map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// ---- Capture pipeline (Phase 3B) ----
+
+/// Capture the primary display, persist the PNG to disk, record the
+/// artifact in the `captures` table, and emit `"capture:screen"` so the
+/// frontend can react.
+///
+/// Returns the [`CaptureMeta`] describing the new capture (id, path,
+/// width, height, created_at). Errors are serialized as a string to
+/// match the convention used by every other command in this file.
+#[tauri::command]
+pub async fn capture_screen(
+    app: AppHandle,
+    state: tauri::State<'_, DbState>,
+) -> std::result::Result<crate::capture::CaptureMeta, String> {
+    // 1. Take the screenshot (blocking — xcap is sync).
+    let meta = crate::capture::capture_primary_display()
+        .map_err(|e| e.to_string())?;
+
+    // 2. Insert a row into the `captures` table referencing the file.
+    //    We use `capture_screen` as the trigger, but the schema requires
+    //    `kind` to be 'screen' or 'audio' — keep it consistent.
+    let _row = crate::db::captures::create(
+        &conn(&state),
+        "screen".to_string(),
+        meta.path.to_string_lossy().into_owned(),
+        Some(meta.width as i32),
+        Some(meta.height as i32),
+        None,
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 3. Emit the event so the frontend can update the history view in
+    //    real time without polling.
+    if let Err(e) = app.emit("capture:screen", &meta) {
+        log::warn!("failed to emit capture:screen event: {e:#}");
+    }
+
+    log::info!("capture_screen complete: id={} path={}", meta.id, meta.path.display());
+    Ok(meta)
 }

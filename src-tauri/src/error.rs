@@ -2,6 +2,26 @@
 
 use thiserror::Error;
 
+/// Errors produced by the screen-capture pipeline.
+///
+/// Kept separate from [`AppError`] so the capture module doesn't have to
+/// know about every other error variant in the app, and so a future
+/// audio-capture variant can live alongside it without bloating `AppError`.
+#[derive(Debug, Error)]
+pub enum CaptureError {
+    #[error("monitor enumeration failed: {0}")]
+    MonitorEnumeration(String),
+
+    #[error("screen capture failed: {0}")]
+    CaptureFailed(String),
+
+    #[error("png encode failed: {0}")]
+    EncodeFailed(String),
+
+    #[error("io error: {0}")]
+    IoError(String),
+}
+
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("tauri error: {0}")]

@@ -10,6 +10,8 @@ mod window;
 mod ipc;
 mod settings;
 mod hotkeys;
+mod ai;
+mod capture;
 
 use tauri::Manager;
 
@@ -18,6 +20,7 @@ use crate::window::overlay;
 use crate::window::tray;
 use crate::settings::SettingsState;
 use crate::db::DbState;
+use crate::ipc::commands::AiState;
 
 pub fn run() {
     // Initialize logging (controlled by RUST_LOG env var)
@@ -37,6 +40,7 @@ pub fn run() {
         // ---------- State ----------
         .manage(SettingsState::default())
         .manage(HotkeyState::default())
+        .manage(AiState::default())
         // ---------- Setup ----------
         .setup(|app| {
             // ---------- Phase 3A — Database ----------
@@ -117,6 +121,12 @@ pub fn run() {
             ipc::commands::save_message,
             ipc::commands::create_capture,
             ipc::commands::get_capture,
+            // ---- Phase 3B — Capture pipeline ----
+            ipc::commands::capture_screen,
+            // ---- Phase 5 — AI Live (Gemini bidi WebSocket) ----
+            ipc::commands::ai_start_live,
+            ipc::commands::ai_send_audio,
+            ipc::commands::ai_stop_live,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
