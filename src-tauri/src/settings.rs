@@ -2,6 +2,8 @@
 
 mod persist;
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::config::DEFAULT_HOTKEY;
@@ -21,6 +23,10 @@ pub struct AppSettings {
     pub gemini_api_key: String,
     pub active_profile_id: Option<String>,
     pub overlay_opacity: f64,
+    pub overlay_layout: String,
+    pub stealth_tier: String,
+    pub ai_provider: String,
+    pub hotkey_overrides: HashMap<String, String>,
 }
 
 impl Default for AppSettings {
@@ -35,6 +41,10 @@ impl Default for AppSettings {
             gemini_api_key: String::new(),
             active_profile_id: None,
             overlay_opacity: 0.92,
+            overlay_layout: "full".to_string(),
+            stealth_tier: "glass".to_string(),
+            ai_provider: "gemini".to_string(),
+            hotkey_overrides: HashMap::new(),
         }
     }
 }
@@ -53,6 +63,9 @@ pub struct AppSettingsPublic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_profile_id: Option<String>,
     pub overlay_opacity: f64,
+    pub overlay_layout: String,
+    pub stealth_tier: String,
+    pub ai_provider: String,
 }
 
 impl AppSettings {
@@ -67,6 +80,9 @@ impl AppSettings {
             gemini_api_key_configured: !self.gemini_api_key.trim().is_empty(),
             active_profile_id: self.active_profile_id.clone(),
             overlay_opacity: self.overlay_opacity,
+            overlay_layout: self.overlay_layout.clone(),
+            stealth_tier: self.stealth_tier.clone(),
+            ai_provider: self.ai_provider.clone(),
         }
     }
 
@@ -81,6 +97,10 @@ impl AppSettings {
             s.launch_at_login = stored.launch_at_login;
             s.active_profile_id = stored.active_profile_id;
             s.overlay_opacity = stored.overlay_opacity;
+            s.overlay_layout = stored.overlay_layout;
+            s.stealth_tier = stored.stealth_tier;
+            s.ai_provider = stored.ai_provider;
+            s.hotkey_overrides = stored.hotkey_overrides;
         }
         if let Some(key) = crate::secrets::get_gemini_api_key()? {
             s.gemini_api_key = key;
@@ -105,6 +125,9 @@ pub struct SettingsPatch {
     pub gemini_api_key: Option<String>,
     pub active_profile_id: Option<Option<String>>,
     pub overlay_opacity: Option<f64>,
+    pub overlay_layout: Option<String>,
+    pub stealth_tier: Option<String>,
+    pub ai_provider: Option<String>,
 }
 
 impl SettingsPatch {
@@ -132,6 +155,15 @@ impl SettingsPatch {
         }
         if let Some(v) = self.overlay_opacity {
             s.overlay_opacity = v.clamp(0.4, 1.0);
+        }
+        if let Some(v) = self.overlay_layout {
+            s.overlay_layout = v;
+        }
+        if let Some(v) = self.stealth_tier {
+            s.stealth_tier = v;
+        }
+        if let Some(v) = self.ai_provider {
+            s.ai_provider = v;
         }
         s
     }
@@ -178,5 +210,14 @@ impl SettingsState {
         merged.persist()?;
         drop(guard);
         Ok(merged.to_public())
+    }
+
+    pub fn set_hotkey_override(&self, action_id: &str, key: &str) -> Result<()> {
+        let mut guard = self.inner.lock().expect("settings mutex poisoned");
+        guard
+            .hotkey_overrides
+            .insert(action_id.to_string(), key.to_string());
+        guard.persist()?;
+        Ok(())
     }
 }

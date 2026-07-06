@@ -6,5 +6,6 @@
 //! events into Tauri events the React frontend can consume.
 
 pub mod gemini_live;
+pub mod groq;
 
 pub use gemini_live::GeminiLiveClient;

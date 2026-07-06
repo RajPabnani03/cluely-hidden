@@ -20,12 +20,26 @@ interface OverlayState {
   currentConversationId: string | null;
   messages: ChatMessage[];
   hotkeyBindings: HotkeyBindings;
+  overlayLayout: "full" | "compact";
+  stealthTier: string;
+  overlayOpacity: number;
+  screenshotTray: import("./tauri").CaptureMeta[];
+  responseSnapshots: string[];
+  responseIndex: number;
 
   setVisible: (v: boolean) => void;
   toggleVisible: () => void;
   setClickThrough: (enabled: boolean) => void;
   setStreaming: (streaming: boolean) => void;
   setConversationId: (id: string | null) => void;
+  setOverlayLayout: (layout: "full" | "compact") => void;
+  setStealthTier: (tier: string) => void;
+  setOverlayOpacity: (o: number) => void;
+  addScreenshotToTray: (meta: import("./tauri").CaptureMeta) => void;
+  removeScreenshotFromTray: (id: string) => void;
+  clearScreenshotTray: () => void;
+  pushResponseSnapshot: (text: string) => void;
+  setResponseIndex: (index: number) => void;
   setConversationTitle: (title: string) => Promise<void>;
   appendMessage: (msg: ChatMessage) => void;
   updateLastMessage: (content: string) => void;
@@ -44,10 +58,45 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
   currentConversationId: null,
   messages: [],
   hotkeyBindings: [] as HotkeyBindings,
+  overlayLayout: "full" as const,
+  stealthTier: "glass",
+  overlayOpacity: 0.92,
+  screenshotTray: [],
+  responseSnapshots: [],
+  responseIndex: 0,
 
   setVisible: (v) => set({ visible: v }),
   toggleVisible: () => set((s) => ({ visible: !s.visible })),
   setClickThrough: (enabled) => set({ clickThrough: enabled }),
+  setOverlayLayout: (layout) => set({ overlayLayout: layout }),
+  setStealthTier: (tier) => set({ stealthTier: tier }),
+  setOverlayOpacity: (o) => set({ overlayOpacity: o }),
+  addScreenshotToTray: (meta) =>
+    set((s) => {
+      const next = [meta, ...s.screenshotTray.filter((x) => x.id !== meta.id)].slice(
+        0,
+        3,
+      );
+      return { screenshotTray: next };
+    }),
+  removeScreenshotFromTray: (id) =>
+    set((s) => ({
+      screenshotTray: s.screenshotTray.filter((x) => x.id !== id),
+    })),
+  clearScreenshotTray: () => set({ screenshotTray: [] }),
+  pushResponseSnapshot: (text) =>
+    set((s) => {
+      const t = text.trim();
+      if (!t) return s;
+      const snapshots = [...s.responseSnapshots, t];
+      return { responseSnapshots: snapshots, responseIndex: snapshots.length - 1 };
+    }),
+  setResponseIndex: (index) =>
+    set((s) => {
+      if (s.responseSnapshots.length === 0) return s;
+      const i = Math.max(0, Math.min(index, s.responseSnapshots.length - 1));
+      return { responseIndex: i };
+    }),
   setStreaming: (streaming) => set({ streaming }),
   setConversationId: (id) => set({ currentConversationId: id }),
   setConversationTitle: async (title) => {
@@ -109,6 +158,9 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
       currentConversationId: null,
       streaming: false,
       clickThrough: false,
+      screenshotTray: [],
+      responseSnapshots: [],
+      responseIndex: 0,
     }),
 }));
 

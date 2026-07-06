@@ -23,12 +23,12 @@ Living backlog derived from [`VISION.md`](./VISION.md). **Status:** v0.5.0 tagge
 
 | ID | Work | Owner lane | Acceptance |
 |----|------|------------|------------|
-| B1 | **Compact pill** overlay mode (minimal chrome) | UX + FE | Toggle from tray or hotkey |
-| B2 | **Screenshot tray** — multi-capture before send (Pluely manual mode) | FE + Rust | 3 screenshots → one prompt |
-| B3 | Finish **11 hotkeys** + Settings rebind recorder | Rust + FE | All actions from ARCHITECTURE.md |
-| B4 | **Click-through** toggle (⌘+M) | Rust | Mouse passes through overlay |
-| B5 | **Stealth tiers** Ghost / Glass / Focus | UX + FE | Cycle hotkey; persists |
-| B6 | Provider stub: **Groq Flash** for text-only fallback | Rust | Settings provider pick |
+| B1 | **Compact pill** overlay mode (minimal chrome) | UX + FE | ✅ Settings layout + compact pill UI |
+| B2 | **Screenshot tray** — multi-capture before send (Pluely manual mode) | FE + Rust | ✅ Tray (max 3) on capture |
+| B3 | Finish **11 hotkeys** + Settings rebind recorder | Rust + FE | ✅ 13 actions incl. scroll + stealth; Hotkeys tab |
+| B4 | **Click-through** toggle (⌘+M) | Rust | ✅ Rust toggle + UI badge |
+| B5 | **Stealth tiers** Ghost / Glass / Focus | UX + FE | ✅ Cycle hotkey + tray + Settings |
+| B6 | Provider stub: **Groq Flash** for text-only fallback | Rust | ✅ `ai_provider` + async `chat` |
 
 ---
 

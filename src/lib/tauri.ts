@@ -58,6 +58,9 @@ export interface AppSettings {
   activeProfileId?: string | null;
   /** Overlay panel opacity 0.4–1.0 */
   overlayOpacity: number;
+  overlayLayout: "full" | "compact";
+  stealthTier: string;
+  aiProvider: "gemini" | "groq";
 }
 
 /** Patch for update_settings — include geminiApiKey only when setting/changing the key. */
@@ -151,7 +154,19 @@ export async function chat(input: {
   }
 
   try {
-    return await invoke<ChatMessage>("chat", { input });
+    const raw = await invoke<{
+      id: string;
+      role: string;
+      content: string;
+      created_at?: number;
+      createdAt?: number;
+    }>("chat", { input });
+    return {
+      id: raw.id,
+      role: raw.role as ChatMessage["role"],
+      content: raw.content,
+      createdAt: raw.createdAt ?? raw.created_at ?? Date.now(),
+    };
   } catch (err) {
     // Graceful fallback: don't leave the UI hanging.
     console.error("chat invoke failed:", err);
@@ -177,7 +192,8 @@ export type HotkeyActionId =
   | "previous_response"
   | "next_response"
   | "scroll_up"
-  | "scroll_down";
+  | "scroll_down"
+  | "cycle_stealth_tier";
 
 export type HotkeyBinding = [HotkeyActionId, string];
 export type HotkeyBindings = HotkeyBinding[];
@@ -191,6 +207,14 @@ export async function rebindHotkey(
   newKey: string,
 ): Promise<void> {
   return invoke("rebind_hotkey", { action, newKey });
+}
+
+export async function cycleStealthTier(): Promise<void> {
+  return invoke("cycle_stealth_tier");
+}
+
+export async function setOverlayLayout(layout: "full" | "compact"): Promise<void> {
+  return invoke("set_overlay_layout", { layout });
 }
 
 export async function onShortcutTriggered(

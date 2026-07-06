@@ -66,7 +66,10 @@ export function ChatStream({ mode }: ChatStreamProps) {
   }
 
   return (
-    <div className="px-1 py-3 space-y-4 min-h-[160px] max-h-[380px] overflow-y-auto scrollbar-thin">
+    <div
+      id="assistant-scroll-region"
+      className="px-1 py-3 space-y-4 min-h-[160px] max-h-[380px] overflow-y-auto scrollbar-thin"
+    >
       {messages.map((m, index) => {
         const isUser = m.role === "user";
         const isLast = index === messages.length - 1;

@@ -34,6 +34,8 @@ pub enum HotkeyAction {
     ScrollUp,
     /// Scroll response area down
     ScrollDown,
+    /// Cycle Ghost → Glass → Focus stealth tier
+    CycleStealthTier,
 }
 
 impl HotkeyAction {
@@ -52,6 +54,7 @@ impl HotkeyAction {
             Self::NextResponse => "next_response",
             Self::ScrollUp => "scroll_up",
             Self::ScrollDown => "scroll_down",
+            Self::CycleStealthTier => "cycle_stealth_tier",
         }
     }
 
@@ -70,6 +73,7 @@ impl HotkeyAction {
             Self::NextResponse => "Next Response",
             Self::ScrollUp => "Scroll Up",
             Self::ScrollDown => "Scroll Down",
+            Self::CycleStealthTier => "Cycle Stealth (Ghost/Glass/Focus)",
         }
     }
 
@@ -88,12 +92,13 @@ impl HotkeyAction {
             Self::NextResponse => "CmdOrCtrl+BracketRight",
             Self::ScrollUp => "CmdOrCtrl+Shift+Up",
             Self::ScrollDown => "CmdOrCtrl+Shift+Down",
+            Self::CycleStealthTier => "CmdOrCtrl+Shift+Backslash",
         }
     }
 
     /// All 12 actions in display order. The length is 12 (was a typo in plan) but the spec says 11.
     /// Actually it's 11 unique actions here.
-    pub fn all() -> [HotkeyAction; 11] {
+    pub fn all() -> [HotkeyAction; 13] {
         [
             Self::ToggleVisibility,
             Self::NextStep,
@@ -106,6 +111,8 @@ impl HotkeyAction {
             Self::PreviousResponse,
             Self::NextResponse,
             Self::ScrollUp,
+            Self::ScrollDown,
+            Self::CycleStealthTier,
         ]
     }
 }
@@ -126,8 +133,8 @@ pub fn handle(action: HotkeyAction, app: &AppHandle) -> Result<()> {
         }
         HotkeyAction::EmergencyErase => emergency_erase(app),
         HotkeyAction::ToggleClickThrough => {
-            let _ = app.emit("shortcut:triggered", action.action_id());
-            Ok(())
+            let chrome = app.state::<crate::window::OverlayChromeState>();
+            helpers::toggle_click_through(app, &chrome)
         }
         HotkeyAction::MoveUp => move_window(app, "up"),
         HotkeyAction::MoveDown => move_window(app, "down"),
@@ -137,9 +144,12 @@ pub fn handle(action: HotkeyAction, app: &AppHandle) -> Result<()> {
         | HotkeyAction::NextResponse
         | HotkeyAction::ScrollUp
         | HotkeyAction::ScrollDown => {
-            // All UI-only events — emit to the frontend
             let _ = app.emit("shortcut:triggered", action.action_id());
             Ok(())
+        }
+        HotkeyAction::CycleStealthTier => {
+            let settings = app.state::<crate::settings::SettingsState>();
+            crate::window::stealth::cycle_stealth_tier(app, &settings)
         }
     }
 }

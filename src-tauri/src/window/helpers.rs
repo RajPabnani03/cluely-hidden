@@ -43,8 +43,21 @@ pub fn toggle(app: &AppHandle) -> Result<()> {
 pub fn set_click_through(app: &AppHandle, enabled: bool) -> Result<()> {
     if let Some(win) = app.get_webview_window(OVERLAY_LABEL) {
         win.set_ignore_cursor_events(enabled)?;
+        let _ = app.emit("overlay:click_through", enabled);
     }
     Ok(())
+}
+
+/// Toggle click-through and sync managed chrome state.
+pub fn toggle_click_through(
+    app: &AppHandle,
+    chrome: &crate::window::OverlayChromeState,
+) -> Result<()> {
+    let mut inner = chrome.0.lock().expect("overlay chrome mutex poisoned");
+    inner.click_through = !inner.click_through;
+    let enabled = inner.click_through;
+    drop(inner);
+    set_click_through(app, enabled)
 }
 
 /// Open (or focus) the settings window.

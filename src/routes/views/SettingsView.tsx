@@ -18,6 +18,8 @@ import {
   createProfile,
   deleteProfile,
 } from "../../lib/tauri";
+import { HotkeyRebindSection } from "../../components/HotkeyRebindSection";
+import { useOverlayStore } from "../../lib/store";
 
 const MODEL_OPTIONS = [
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (fast)" },
@@ -28,7 +30,7 @@ export function SettingsView() {
   const back = useRouter((s) => s.backToAssistant);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [profiles, setProfiles] = useState<DbProfile[]>([]);
-  const [activeTab, setActiveTab] = useState<"general" | "profiles" | "model">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "profiles" | "model" | "hotkeys">("general");
   const [status, setStatus] = useState("");
   const [geminiKeyDraft, setGeminiKeyDraft] = useState("");
 
@@ -52,6 +54,17 @@ export function SettingsView() {
     try {
       const updated = await updateSettings(patch);
       setSettings(updated);
+      if (patch.overlayLayout) {
+        useOverlayStore.getState().setOverlayLayout(
+          updated.overlayLayout === "compact" ? "compact" : "full",
+        );
+      }
+      if (patch.stealthTier) {
+        useOverlayStore.getState().setStealthTier(updated.stealthTier);
+      }
+      if (patch.overlayOpacity != null) {
+        useOverlayStore.getState().setOverlayOpacity(updated.overlayOpacity);
+      }
       if (!("geminiApiKey" in patch)) {
         flash("Saved");
       } else {
@@ -86,7 +99,7 @@ export function SettingsView() {
         </header>
 
         <div className="flex border-b border-white/[0.06]">
-          {(["general", "profiles", "model"] as const).map((tab) => (
+          {(["general", "profiles", "model", "hotkeys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -139,6 +152,33 @@ export function SettingsView() {
                     className="w-full accent-blue-500"
                   />
                 </Row>
+                <Row label="Layout">
+                  <SegmentedControl
+                    value={settings.overlayLayout ?? "full"}
+                    options={[
+                      { value: "full", label: "Full card" },
+                      { value: "compact", label: "Compact pill" },
+                    ]}
+                    onChange={(v) =>
+                      applySettings({
+                        overlayLayout: v as AppSettings["overlayLayout"],
+                      })
+                    }
+                  />
+                </Row>
+                <Row label="Stealth tier">
+                  <SegmentedControl
+                    value={settings.stealthTier ?? "glass"}
+                    options={[
+                      { value: "ghost", label: "Ghost" },
+                      { value: "glass", label: "Glass" },
+                      { value: "focus", label: "Focus" },
+                    ]}
+                    onChange={(v) =>
+                      applySettings({ stealthTier: v as string })
+                    }
+                  />
+                </Row>
               </Section>
               <Section title="Toggle hotkey">
                 <Row label="Show / hide overlay">
@@ -162,6 +202,20 @@ export function SettingsView() {
 
           {activeTab === "model" && settings && (
             <>
+              <Section title="Provider">
+                <SegmentedControl
+                  value={settings.aiProvider ?? "gemini"}
+                  options={[
+                    { value: "gemini", label: "Gemini Live" },
+                    { value: "groq", label: "Groq (text chat)" },
+                  ]}
+                  onChange={(v) =>
+                    applySettings({
+                      aiProvider: v as AppSettings["aiProvider"],
+                    })
+                  }
+                />
+              </Section>
               <Section title="Gemini API key">
                 <p className="text-[11px] text-zinc-500 mb-2">
                   Required for Live sessions. Create a key at{" "}
@@ -215,6 +269,12 @@ export function SettingsView() {
                 />
               </Section>
             </>
+          )}
+
+          {activeTab === "hotkeys" && (
+            <Section title="Keyboard shortcuts">
+              <HotkeyRebindSection onStatus={flash} />
+            </Section>
           )}
         </div>
       </div>

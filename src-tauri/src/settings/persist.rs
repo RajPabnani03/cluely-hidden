@@ -4,6 +4,8 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::config;
@@ -25,6 +27,26 @@ pub struct StoredSettings {
     /// UI glass strength 0.4–1.0 (default 0.92).
     #[serde(default = "default_overlay_opacity")]
     pub overlay_opacity: f64,
+    #[serde(default = "default_overlay_layout")]
+    pub overlay_layout: String,
+    #[serde(default = "default_stealth_tier")]
+    pub stealth_tier: String,
+    #[serde(default = "default_ai_provider")]
+    pub ai_provider: String,
+    #[serde(default)]
+    pub hotkey_overrides: HashMap<String, String>,
+}
+
+fn default_overlay_layout() -> String {
+    "full".to_string()
+}
+
+fn default_stealth_tier() -> String {
+    "glass".to_string()
+}
+
+fn default_ai_provider() -> String {
+    "gemini".to_string()
 }
 
 fn default_overlay_opacity() -> f64 {
@@ -42,6 +64,10 @@ impl From<&AppSettings> for StoredSettings {
             launch_at_login: s.launch_at_login,
             active_profile_id: s.active_profile_id.clone(),
             overlay_opacity: s.overlay_opacity,
+            overlay_layout: s.overlay_layout.clone(),
+            stealth_tier: s.stealth_tier.clone(),
+            ai_provider: s.ai_provider.clone(),
+            hotkey_overrides: s.hotkey_overrides.clone(),
         }
     }
 }

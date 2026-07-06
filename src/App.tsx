@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useOverlayStore } from "./lib/store";
 import { useRouter } from "./lib/router";
 import { syncBuiltinProfilesToDb } from "./lib/profiles";
+import { useOverlayChrome } from "./lib/useOverlayChrome";
 import { AssistantView } from "./routes/views/AssistantView";
 import { SettingsView } from "./routes/views/SettingsView";
 import { HistoryView } from "./routes/views/HistoryView";
@@ -19,14 +20,9 @@ export default function App() {
   const visible = useOverlayStore((s) => s.visible);
   const currentView = useRouter((s) => s.currentView);
   const setVisible = useOverlayStore((s) => s.setVisible);
-  const loadHotkeyBindings = useOverlayStore((s) => s.loadHotkeyBindings);
   const resetSensitiveState = useOverlayStore((s) => s.resetSensitiveState);
 
-  // Initial loads — hotkey bindings + builtin profile prompts
-  useEffect(() => {
-    loadHotkeyBindings();
-    syncBuiltinProfilesToDb();
-  }, [loadHotkeyBindings]);
+  useOverlayChrome();
 
   // Visibility event from Rust (hotkey / tray)
   useEffect(() => {
@@ -51,6 +47,10 @@ export default function App() {
       .catch(console.error);
     return () => unlisten?.();
   }, [resetSensitiveState]);
+
+  useEffect(() => {
+    syncBuiltinProfilesToDb();
+  }, []);
 
   if (!visible) return null;
 

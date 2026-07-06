@@ -50,9 +50,13 @@ import {
   micStop,
   createConversation,
   getSettings,
+  setOverlayLayout,
+  updateSettings,
   type CaptureMeta,
   type MicLevel,
 } from "../../lib/tauri";
+import { CompactPill } from "../../components/CompactPill";
+import { ScreenshotTray } from "../../components/ScreenshotTray";
 import { CardShell } from "../../components/ui";
 import { cn } from "../../lib/utils";
 
@@ -70,8 +74,23 @@ export function AssistantView() {
   const appendAssistantStreamChunk = useOverlayStore(
     (s) => s.appendAssistantStreamChunk,
   );
+  const overlayLayout = useOverlayStore((s) => s.overlayLayout);
+  const overlayOpacity = useOverlayStore((s) => s.overlayOpacity);
+  const stealthTier = useOverlayStore((s) => s.stealthTier);
+  const clickThrough = useOverlayStore((s) => s.clickThrough);
+  const hotkeyBindings = useOverlayStore((s) => s.hotkeyBindings);
+  const screenshotTray = useOverlayStore((s) => s.screenshotTray);
+  const addScreenshotToTray = useOverlayStore((s) => s.addScreenshotToTray);
+  const removeScreenshotFromTray = useOverlayStore(
+    (s) => s.removeScreenshotFromTray,
+  );
+  const clearScreenshotTray = useOverlayStore((s) => s.clearScreenshotTray);
+  const pushResponseSnapshot = useOverlayStore((s) => s.pushResponseSnapshot);
+  const setResponseIndex = useOverlayStore((s) => s.setResponseIndex);
+  const responseSnapshots = useOverlayStore((s) => s.responseSnapshots);
+  const responseIndex = useOverlayStore((s) => s.responseIndex);
+  const updateLastMessage = useOverlayStore((s) => s.updateLastMessage);
   const setView = useRouter((s) => s.setView);
-  const currentView = useRouter((s) => s.currentView);
 
   const [activeChip, setActiveChip] = useState<QuickAction>("assist");
   const [showMenu, setShowMenu] = useState(false);
@@ -80,14 +99,6 @@ export function AssistantView() {
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [transcript, setTranscript] = useState<string>("");
-  const [overlayOpacity, setOverlayOpacity] = useState(0.92);
-
-  useEffect(() => {
-    if (currentView !== "assistant") return;
-    getSettings()
-      .then((s) => setOverlayOpacity(s.overlayOpacity ?? 0.92))
-      .catch(() => {});
-  }, [currentView]);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -97,21 +108,10 @@ export function AssistantView() {
   const [isMicRecording, setIsMicRecording] = useState(false);
   const [micLevel, setMicLevel] = useState<number>(-Infinity);
   const unlistenRef = useRef<UnlistenFn[]>([]);
-
-  // Listen for the main assist hotkey to switch to Assist mode.
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    onShortcutTriggered((action) => {
-      if (action === "next_step") {
-        setActiveChip("assist");
-      }
-    })
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch(console.error);
-    return () => unlisten?.();
-  }, []);
+  const sessionActiveRef = useRef(false);
+  const onCaptureRef = useRef<(() => Promise<void>) | null>(null);
+  const onStartSessionRef = useRef<(() => Promise<void>) | null>(null);
+  sessionActiveRef.current = sessionActive;
 
   // Subscribe to the Phase 4 event bus. All unlistens are collected and
   // torn down on unmount.
@@ -182,6 +182,11 @@ export function AssistantView() {
       listen("ai:turn:complete", () => {
         setStatusMessage("turn complete");
         setStreaming(false);
+        const last = useOverlayStore
+          .getState()
+          .messages.filter((m) => m.role === "assistant")
+          .pop();
+        if (last?.content) pushResponseSnapshot(last.content);
       }),
     );
 
@@ -191,13 +196,14 @@ export function AssistantView() {
     safe(
       listen<CaptureMeta>("capture:screen", (e) => {
         if (e.payload) {
-          setLastCapture({
+          const meta = {
             ...e.payload,
-            // Rust serializes `created_at` (snake_case); normalize to camelCase.
             createdAt:
               (e.payload as unknown as { created_at?: number }).created_at ??
               e.payload.createdAt,
-          });
+          };
+          setLastCapture(meta);
+          addScreenshotToTray(meta);
         }
       }),
     );
@@ -233,7 +239,7 @@ export function AssistantView() {
       }
       unlistenRef.current = [];
     };
-  }, [appendAssistantStreamChunk, setStreaming]);
+  }, [appendAssistantStreamChunk, setStreaming, pushResponseSnapshot, addScreenshotToTray]);
 
   // ---- Phase 4: Action handlers ----
 
@@ -304,13 +310,64 @@ export function AssistantView() {
     try {
       const meta = await captureScreen();
       setLastCapture(meta);
+      addScreenshotToTray(meta);
     } catch (err) {
       console.error("captureScreen failed:", err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [addScreenshotToTray]);
+
+  onCaptureRef.current = onCapture;
+  onStartSessionRef.current = onStartSession;
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    onShortcutTriggered((action) => {
+      if (action === "next_step") {
+        setActiveChip("assist");
+        if (sessionActiveRef.current) {
+          void onCaptureRef.current?.();
+        } else {
+          void onStartSessionRef.current?.();
+        }
+        return;
+      }
+      const scrollEl = document.getElementById("assistant-scroll-region");
+      if (action === "scroll_up") {
+        scrollEl?.scrollBy({ top: -96, behavior: "smooth" });
+        return;
+      }
+      if (action === "scroll_down") {
+        scrollEl?.scrollBy({ top: 96, behavior: "smooth" });
+        return;
+      }
+      if (action === "previous_response" && responseSnapshots.length > 0) {
+        const next = Math.max(0, responseIndex - 1);
+        setResponseIndex(next);
+        const text = responseSnapshots[next];
+        if (text) updateLastMessage(text);
+        return;
+      }
+      if (action === "next_response" && responseSnapshots.length > 0) {
+        const next = Math.min(responseSnapshots.length - 1, responseIndex + 1);
+        setResponseIndex(next);
+        const text = responseSnapshots[next];
+        if (text) updateLastMessage(text);
+      }
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(console.error);
+    return () => unlisten?.();
+  }, [
+    responseIndex,
+    responseSnapshots,
+    setResponseIndex,
+    updateLastMessage,
+  ]);
 
   const onStartMic = useCallback(async () => {
     setError(null);
@@ -351,6 +408,44 @@ export function AssistantView() {
     setActiveChip("assist");
   };
 
+  const lastAssistant =
+    messages.filter((m) => m.role === "assistant").pop()?.content ?? "";
+
+  const expandFromCompact = useCallback(async () => {
+    useOverlayStore.getState().setOverlayLayout("full");
+    await updateSettings({ overlayLayout: "full" });
+    await setOverlayLayout("full");
+  }, []);
+
+  const hintFor = (action: string, label: string) => {
+    const row = hotkeyBindings.find(([a]) => a === action);
+    if (!row) return { label, keys: ["?"] };
+    const keys = row[1].split("+").map((k) =>
+      k === "CmdOrCtrl" ? "Cmd" : k.replace(/^Arrow/, ""),
+    );
+    return { label, keys };
+  };
+
+  if (overlayLayout === "compact") {
+    return (
+      <CompactPill
+        opacity={overlayOpacity}
+        stealthTier={stealthTier}
+        sessionActive={sessionActive}
+        statusLabel={
+          status === "thinking"
+            ? "Thinking"
+            : sessionActive
+              ? "Live"
+              : "Ready"
+        }
+        preview={lastAssistant}
+        onExpand={() => void expandFromCompact()}
+        onOpenSettings={() => setView("settings")}
+      />
+    );
+  }
+
   return (
     <div className="h-full w-full flex items-start justify-center p-4 bg-transparent">
       <CardShell className="max-h-[85vh]" opacity={overlayOpacity}>
@@ -367,6 +462,11 @@ export function AssistantView() {
             <span className="text-[11px] font-semibold text-zinc-200 tracking-tight">
               Cluely
             </span>
+            {clickThrough && (
+              <span className="text-[9px] text-amber-400/90 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                click-through
+              </span>
+            )}
           </div>
 
           {/* Status pill, absolutely centered */}
@@ -456,6 +556,11 @@ export function AssistantView() {
         </div>
 
         {/* Screenshot preview (server-pushed) */}
+        <ScreenshotTray
+          items={screenshotTray}
+          onRemove={removeScreenshotFromTray}
+          onClear={clearScreenshotTray}
+        />
         <ScreenshotPreview />
 
         {/* Quick action chips */}
@@ -572,8 +677,9 @@ export function AssistantView() {
         {/* Hotkey hint bar — Cluely-style keycap row */}
         <HotkeyHintBar
           hints={[
-            { label: "Hide", keys: ["Cmd", "\\"] },
-            { label: "Next step", keys: ["Cmd", "Enter"] },
+            hintFor("toggle_visibility", "Hide"),
+            hintFor("next_step", "Next step"),
+            hintFor("cycle_stealth_tier", "Stealth"),
           ]}
         />
       </CardShell>

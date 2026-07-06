@@ -72,6 +72,7 @@ pub fn get_hotkey_bindings(state: tauri::State<'_, HotkeyState>) -> Result<Vec<(
 #[tauri::command]
 pub fn rebind_hotkey(
     state: tauri::State<'_, HotkeyState>,
+    settings: tauri::State<'_, SettingsState>,
     app: tauri::AppHandle,
     action: String,
     new_key: String,
@@ -79,25 +80,65 @@ pub fn rebind_hotkey(
     let action_enum = actions::from_action_id(&action)
         .ok_or_else(|| crate::error::AppError::Other(format!("unknown action: {action}")))?;
     let mut registry = state.0.lock().expect("hotkey mutex poisoned");
-    registry.rebind(&app, action_enum, new_key)
+    registry.rebind(&app, action_enum, new_key.clone())?;
+    settings.set_hotkey_override(&action, &new_key)?;
+    Ok(())
 }
 
-// ---------- Chat (stub for v0.1; real streaming in v0.2) ----------
+#[tauri::command]
+pub fn cycle_stealth_tier(
+    app: AppHandle,
+    settings: tauri::State<'_, SettingsState>,
+) -> Result<()> {
+    crate::window::stealth::cycle_stealth_tier(&app, &settings)
+}
 
 #[tauri::command]
-pub fn chat(input: ChatInput) -> Result<ChatOutput> {
-    // For v0.1, echo the user message back. Real AI is wired in Phase 7.
-    log::info!("chat invoked: conv={:?}, msg_len={}", input.conversation_id, input.message.len());
+pub fn set_overlay_layout(
+    app: AppHandle,
+    settings: tauri::State<'_, SettingsState>,
+    layout: String,
+) -> Result<()> {
+    let layout = if layout == "compact" { "compact" } else { "full" };
+    let patch = SettingsPatch {
+        overlay_layout: Some(layout.to_string()),
+        ..Default::default()
+    };
+    settings.update(patch)?;
+    crate::window::layout::apply_layout(&app, layout)
+}
 
-    let reply = format!(
-        "(stub) You said: \"{}\"\n\nIn v0.2 this will route to Ollama (local) or your cloud provider.",
-        input.message
+// ---------- Chat (text fallback: Groq or stub) ----------
+
+#[tauri::command]
+pub async fn chat(
+    input: ChatInput,
+    settings: tauri::State<'_, SettingsState>,
+) -> Result<ChatOutput> {
+    log::info!(
+        "chat invoked: conv={:?}, msg_len={}",
+        input.conversation_id,
+        input.message.len()
     );
+
+    let s = settings.get();
+    let content = if s.ai_provider == "groq" {
+        if std::env::var("GROQ_API_KEY").is_ok() {
+            crate::ai::groq::complete_text(&s.model, &input.message).await?
+        } else {
+            crate::ai::groq::stub_reply(&input.message)
+        }
+    } else {
+        format!(
+            "(Gemini Live is the primary path.) Text chat stub: \"{}\"",
+            input.message
+        )
+    };
 
     Ok(ChatOutput {
         id: input.conversation_id.unwrap_or_else(|| "pending".to_string()),
         role: "assistant".to_string(),
-        content: reply,
+        content,
         created_at: chrono::Utc::now().timestamp_millis(),
     })
 }

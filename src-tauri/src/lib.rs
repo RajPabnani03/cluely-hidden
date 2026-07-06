@@ -45,6 +45,7 @@ pub fn run() {
             SettingsState::default()
         }))
         .manage(HotkeyState::default())
+        .manage(crate::window::OverlayChromeState::default())
         .manage(AiState::default())
         .manage(MicState::default())
         // ---------- Setup ----------
@@ -90,11 +91,20 @@ pub fn run() {
             // Create the tray icon (the only visible UI presence).
             tray::create(app.handle())?;
 
-            // Register all 11 hotkeys via the registry
-            let registry = app.state::<HotkeyState>();
-            let registry = registry.0.lock().expect("hotkey mutex poisoned");
-            if let Err(e) = registry.register_all(app.handle()) {
-                log::error!("failed to register hotkeys: {e:#}");
+            // Hotkeys from persisted overrides
+            let settings = app.state::<SettingsState>();
+            let overrides = settings.get().hotkey_overrides.clone();
+            let layout = settings.get().overlay_layout.clone();
+            {
+                let hotkey_state = app.state::<HotkeyState>();
+                let mut registry = hotkey_state.0.lock().expect("hotkey mutex poisoned");
+                *registry = crate::hotkeys::registry::HotkeyRegistry::new_with_overrides(&overrides);
+                if let Err(e) = registry.register_all(app.handle()) {
+                    log::error!("failed to register hotkeys: {e:#}");
+                }
+            }
+            if let Err(e) = crate::window::layout::apply_layout(app.handle(), &layout) {
+                log::warn!("apply overlay layout on startup: {e:#}");
             }
 
             log::info!("setup complete");
@@ -113,6 +123,8 @@ pub fn run() {
             ipc::commands::chat,
             ipc::commands::get_hotkey_bindings,
             ipc::commands::rebind_hotkey,
+            ipc::commands::cycle_stealth_tier,
+            ipc::commands::set_overlay_layout,
             // ---- Phase 3A — Database ----
             ipc::commands::list_profiles,
             ipc::commands::get_profile,

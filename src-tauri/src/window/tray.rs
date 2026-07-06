@@ -6,7 +6,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
 };
 
 use crate::window::helpers;
@@ -26,13 +26,24 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 
     let show_item = MenuItem::with_id(app, "show", "Show / Hide Overlay", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
-    let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let stealth_item =
+        MenuItem::with_id(app, "stealth", "Cycle Stealth Tier", true, None::<&str>)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
+    let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let sep3 = PredefinedMenuItem::separator(app)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit Cluely", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
-        &[&show_item, &sep1, &settings_item, &sep2, &quit_item],
+        &[
+            &show_item,
+            &sep1,
+            &stealth_item,
+            &sep2,
+            &settings_item,
+            &sep3,
+            &quit_item,
+        ],
     )?;
 
     TrayIconBuilder::with_id(TRAY_ID)
@@ -47,10 +58,19 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                     log::error!("tray toggle failed: {e:#}");
                 }
             }
-            "settings" => {
-                if let Err(e) = helpers::open_settings(app) {
-                    log::error!("open_settings failed: {e:#}");
+            "stealth" => {
+                if let Err(e) = crate::window::stealth::cycle_stealth_tier(
+                    app,
+                    &app.state::<crate::settings::SettingsState>(),
+                ) {
+                    log::error!("cycle stealth failed: {e:#}");
                 }
+            }
+            "settings" => {
+                if let Err(e) = overlay_cmd::show(app) {
+                    log::error!("tray show overlay for settings failed: {e:#}");
+                }
+                let _ = app.emit("overlay:navigate", "settings");
             }
             "quit" => helpers::quit(app),
             _ => {}

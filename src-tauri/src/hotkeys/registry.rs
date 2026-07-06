@@ -19,9 +19,17 @@ pub struct HotkeyRegistry {
 impl HotkeyRegistry {
     /// New registry with all defaults
     pub fn new() -> Self {
+        Self::new_with_overrides(&std::collections::HashMap::new())
+    }
+
+    pub fn new_with_overrides(overrides: &std::collections::HashMap<String, String>) -> Self {
         let mut bindings = HashMap::new();
         for action in HotkeyAction::all() {
-            bindings.insert(action, action.default_key().to_string());
+            let key = overrides
+                .get(action.action_id())
+                .cloned()
+                .unwrap_or_else(|| action.default_key().to_string());
+            bindings.insert(action, key);
         }
         Self { bindings }
     }
