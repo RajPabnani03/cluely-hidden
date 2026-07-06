@@ -44,6 +44,13 @@ scripts/signing.env
 .env.local
 .env.*.local
 
+# Secrets & local app data (never commit)
+*.pem
+*.p12
+*.mobileprovision
+**/secure_storage.json
+**/settings.json
+
 # Capture storage (live data)
 captures/
 *.wav

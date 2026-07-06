@@ -69,6 +69,8 @@ cd src-tauri && cargo check
 
 See [`CHANGELOG.md`](./CHANGELOG.md).
 
+**Security:** API keys and signing credentials stay on your machine only — see [`SECURITY.md`](./SECURITY.md).
+
 ---
 
 ## License
