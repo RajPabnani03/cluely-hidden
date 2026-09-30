@@ -28,6 +28,20 @@ interface OverlayState {
   responseIndex: number;
   speakableText: string;
 
+  // Live session UI state. Kept in the store (not AssistantView local state)
+  // so hiding/showing the overlay — which unmounts the view — does not lose
+  // the fact that a session is still streaming underneath.
+  sessionActive: boolean;
+  /** Epoch ms when the live session started; drives the recording timer. */
+  sessionStartedAt: number | null;
+  isMicRecording: boolean;
+  micLevel: number;
+  transcript: string;
+  liveStatus: "idle" | "ready" | "reconnecting" | "error";
+  statusMessage: string;
+  audioPlaying: boolean;
+  lastCapture: import("./tauri").CaptureMeta | null;
+
   setVisible: (v: boolean) => void;
   toggleVisible: () => void;
   setClickThrough: (enabled: boolean) => void;
@@ -42,6 +56,15 @@ interface OverlayState {
   pushResponseSnapshot: (text: string) => void;
   setResponseIndex: (index: number) => void;
   setSpeakableText: (text: string) => void;
+  setSessionActive: (v: boolean) => void;
+  setIsMicRecording: (v: boolean) => void;
+  setMicLevel: (db: number) => void;
+  setTranscript: (t: string) => void;
+  appendTranscript: (chunk: string) => void;
+  setLiveStatus: (s: "idle" | "ready" | "reconnecting" | "error") => void;
+  setStatusMessage: (m: string) => void;
+  setAudioPlaying: (v: boolean) => void;
+  setLastCapture: (m: import("./tauri").CaptureMeta | null) => void;
   setConversationTitle: (title: string) => Promise<void>;
   appendMessage: (msg: ChatMessage) => void;
   updateLastMessage: (content: string) => void;
@@ -67,6 +90,15 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
   responseSnapshots: [],
   responseIndex: 0,
   speakableText: "",
+  sessionActive: false,
+  sessionStartedAt: null,
+  isMicRecording: false,
+  micLevel: -Infinity,
+  transcript: "",
+  liveStatus: "idle",
+  statusMessage: "",
+  audioPlaying: false,
+  lastCapture: null,
 
   setVisible: (v) => set({ visible: v }),
   toggleVisible: () => set((s) => ({ visible: !s.visible })),
@@ -101,6 +133,20 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
       return { responseIndex: i };
     }),
   setSpeakableText: (text) => set({ speakableText: text }),
+  setSessionActive: (v) =>
+    set((s) => ({
+      sessionActive: v,
+      sessionStartedAt: v ? (s.sessionStartedAt ?? Date.now()) : null,
+    })),
+  setIsMicRecording: (v) => set({ isMicRecording: v }),
+  setMicLevel: (db) => set({ micLevel: db }),
+  setTranscript: (t) => set({ transcript: t }),
+  appendTranscript: (chunk) =>
+    set((s) => ({ transcript: (s.transcript + chunk).slice(-4000) })),
+  setLiveStatus: (s) => set({ liveStatus: s }),
+  setStatusMessage: (m) => set({ statusMessage: m }),
+  setAudioPlaying: (v) => set({ audioPlaying: v }),
+  setLastCapture: (m) => set({ lastCapture: m }),
   setStreaming: (streaming) => set({ streaming }),
   setConversationId: (id) => set({ currentConversationId: id }),
   setConversationTitle: async (title) => {
@@ -166,6 +212,15 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
       responseSnapshots: [],
       responseIndex: 0,
       speakableText: "",
+      sessionActive: false,
+      sessionStartedAt: null,
+      isMicRecording: false,
+      micLevel: -Infinity,
+      transcript: "",
+      liveStatus: "idle",
+      statusMessage: "",
+      audioPlaying: false,
+      lastCapture: null,
     }),
 }));
 

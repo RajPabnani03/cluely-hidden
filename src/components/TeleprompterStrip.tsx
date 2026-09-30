@@ -1,6 +1,15 @@
 /** Teleprompter — primary “say this” hero (Cluely focal response). */
 import { cn } from "../lib/utils";
 
+// Snapshots may carry markdown; the strip is for speaking, so drop markup.
+function toSpeakable(text: string): string {
+  return text
+    .replace(/(\*\*|__|\*|_)(.*?)\1/g, "$2")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+}
+
 export function TeleprompterStrip({
   text,
   className,
@@ -8,7 +17,8 @@ export function TeleprompterStrip({
   text: string;
   className?: string;
 }) {
-  if (!text.trim()) return null;
+  const speakable = toSpeakable(text);
+  if (!speakable.trim()) return null;
   return (
     <div
       className={cn(
@@ -23,7 +33,7 @@ export function TeleprompterStrip({
         AI response
       </p>
       <p className="text-[17px] font-medium text-zinc-50 leading-[1.45] tracking-[-0.01em]">
-        {text}
+        {speakable}
       </p>
     </div>
   );

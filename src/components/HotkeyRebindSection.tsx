@@ -5,6 +5,7 @@ import {
   type HotkeyActionId,
   type HotkeyBindings,
 } from "../lib/tauri";
+import { formatHotkey } from "../lib/keys";
 
 const ACTION_LABELS: Record<HotkeyActionId, string> = {
   toggle_visibility: "Show / hide overlay",
@@ -21,21 +22,6 @@ const ACTION_LABELS: Record<HotkeyActionId, string> = {
   scroll_down: "Scroll down",
   cycle_stealth_tier: "Cycle stealth tier",
 };
-
-function formatKeyCombo(combo: string): string {
-  return combo
-    .replace(/CmdOrCtrl/g, "⌘")
-    .replace(/Shift/g, "⇧")
-    .replace(/Alt/g, "⌥")
-    .replace(/BracketLeft/g, "[")
-    .replace(/BracketRight/g, "]")
-    .replace(/Backslash/g, "\\")
-    .replace(/Enter/g, "↵")
-    .replace(/ArrowUp/g, "↑")
-    .replace(/ArrowDown/g, "↓")
-    .replace(/ArrowLeft/g, "←")
-    .replace(/ArrowRight/g, "→");
-}
 
 interface HotkeyRebindSectionProps {
   onStatus: (msg: string) => void;
@@ -103,6 +89,7 @@ export function HotkeyRebindSection({ onStatus }: HotkeyRebindSectionProps) {
                   if (e.key === "Enter") void save();
                   if (e.key === "Escape") setEditing(null);
                 }}
+                onFocus={(e) => e.target.select()}
                 autoFocus
               />
             ) : (
@@ -111,7 +98,7 @@ export function HotkeyRebindSection({ onStatus }: HotkeyRebindSectionProps) {
                 onClick={() => startEdit(action, key)}
                 className="font-mono text-[10px] bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-200 hover:border-blue-500/50"
               >
-                {formatKeyCombo(key)}
+                {formatHotkey(key)}
               </button>
             )}
           </li>

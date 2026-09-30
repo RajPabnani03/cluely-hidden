@@ -5,6 +5,8 @@ import { cn } from "../lib/utils";
 interface RecordingPillProps {
   /** Whether recording is active. When true, the elapsed timer ticks. */
   active: boolean;
+  /** Session start epoch (ms). Falls back to mount time when absent. */
+  startedAt?: number | null;
   /** Optional label override (default: "Recording"). */
   label?: string;
 }
@@ -15,7 +17,11 @@ interface RecordingPillProps {
  * Shows a pulsing red dot + label + mm:ss timer. Ticks every second
  * while `active` is true; resets to 00:00 when deactivated.
  */
-export function RecordingPill({ active, label = "Recording" }: RecordingPillProps) {
+export function RecordingPill({
+  active,
+  startedAt,
+  label = "Recording",
+}: RecordingPillProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -23,12 +29,13 @@ export function RecordingPill({ active, label = "Recording" }: RecordingPillProp
       setElapsed(0);
       return;
     }
-    const start = Date.now();
+    const start = startedAt ?? Date.now();
+    setElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000)));
     const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000));
+      setElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000)));
     }, 1000);
     return () => clearInterval(id);
-  }, [active]);
+  }, [active, startedAt]);
 
   if (!active) return null;
 

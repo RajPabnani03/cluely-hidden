@@ -314,6 +314,12 @@ function applyShortcut(action: string) {
       break;
     }
     case "emergency_erase":
+      stopLiveTimers();
+      if (state.micTimer !== undefined) {
+        window.clearInterval(state.micTimer);
+        state.micTimer = undefined;
+      }
+      emitLocal("ai:status", "closed");
       messages.length = 0;
       conversations.length = 0;
       emitLocal("clear-sensitive-data", null);
@@ -332,7 +338,6 @@ function applyShortcut(action: string) {
 // ---------------- keyboard map (mirrors global shortcuts) ----------------
 
 const KEYMAP: Record<string, string> = {
-  "\\": "toggle_visibility",
   enter: "next_step",
   m: "toggle_click_through",
   "[": "previous_response",
@@ -344,9 +349,11 @@ window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   let action: string | null = null;
   if (meta && e.shiftKey && key === "e") action = "emergency_erase";
-  else if (meta && e.shiftKey && key === "\\") action = "cycle_stealth_tier";
+  // e.code (not e.key) — Shift+\ produces "|" on US layouts.
+  else if (meta && e.shiftKey && e.code === "Backslash") action = "cycle_stealth_tier";
   else if (meta && e.shiftKey && key === "arrowup") action = "scroll_up";
   else if (meta && e.shiftKey && key === "arrowdown") action = "scroll_down";
+  else if (meta && e.code === "Backslash") action = "toggle_visibility";
   else if (meta && key in KEYMAP) action = KEYMAP[key];
   else if (e.altKey && key === "arrowup") action = "move_up";
   else if (e.altKey && key === "arrowdown") action = "move_down";

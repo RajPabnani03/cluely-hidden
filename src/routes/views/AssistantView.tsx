@@ -58,7 +58,6 @@ import { cn } from "../../lib/utils";
 import { keyParts } from "../../lib/keys";
 
 type HeaderStatus = "ready" | "listening" | "thinking";
-type LiveStatus = "idle" | "ready" | "reconnecting" | "error";
 
 
 export function AssistantView() {
@@ -96,18 +95,27 @@ export function AssistantView() {
   const [showMenu, setShowMenu] = useState(false);
   const [showSessionDetails, setShowSessionDetails] = useState(false);
 
-  // ---- Phase 4: Live session state ----
-  const [liveStatus, setLiveStatus] = useState<LiveStatus>("idle");
-  const [statusMessage, setStatusMessage] = useState<string>("");
-  const [transcript, setTranscript] = useState<string>("");
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [sessionActive, setSessionActive] = useState(false);
+  // ---- Phase 4: Live session state (store-backed so it survives hide/show) ----
+  const liveStatus = useOverlayStore((s) => s.liveStatus);
+  const statusMessage = useOverlayStore((s) => s.statusMessage);
+  const transcript = useOverlayStore((s) => s.transcript);
+  const audioPlaying = useOverlayStore((s) => s.audioPlaying);
+  const sessionActive = useOverlayStore((s) => s.sessionActive);
+  const sessionStartedAt = useOverlayStore((s) => s.sessionStartedAt);
+  const lastCapture = useOverlayStore((s) => s.lastCapture);
+  const isMicRecording = useOverlayStore((s) => s.isMicRecording);
+  const micLevel = useOverlayStore((s) => s.micLevel);
+  const setLiveStatus = useOverlayStore((s) => s.setLiveStatus);
+  const setStatusMessage = useOverlayStore((s) => s.setStatusMessage);
+  const setTranscript = useOverlayStore((s) => s.setTranscript);
+  const appendTranscript = useOverlayStore((s) => s.appendTranscript);
+  const setAudioPlaying = useOverlayStore((s) => s.setAudioPlaying);
+  const setSessionActive = useOverlayStore((s) => s.setSessionActive);
+  const setLastCapture = useOverlayStore((s) => s.setLastCapture);
+  const setIsMicRecording = useOverlayStore((s) => s.setIsMicRecording);
+  const setMicLevel = useOverlayStore((s) => s.setMicLevel);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastCapture, setLastCapture] = useState<CaptureMeta | null>(null);
-  // ---- Microphone capture ----
-  const [isMicRecording, setIsMicRecording] = useState(false);
-  const [micLevel, setMicLevel] = useState<number>(-Infinity);
   const [vadMode, setVadMode] = useState<"aggressive" | "balanced" | "manual">(
     "balanced",
   );
@@ -163,7 +171,7 @@ export function AssistantView() {
       listen<string>("ai:transcript", (e) => {
         const chunk = e.payload ?? "";
         if (typeof chunk === "string" && chunk.length > 0) {
-          setTranscript((prev) => (prev + chunk).slice(-4000));
+          appendTranscript(chunk);
         }
       }),
     );
@@ -314,6 +322,7 @@ export function AssistantView() {
       setSessionActive(false);
       setLiveStatus("idle");
       setStatusMessage("stopped");
+      setStreaming(false);
     } catch (err) {
       console.error("aiStopLive failed:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -325,6 +334,7 @@ export function AssistantView() {
     isMicRecording,
     messages,
     setConversationId,
+    setStreaming,
     transcript,
   ]);
 
@@ -563,6 +573,7 @@ export function AssistantView() {
             {sessionActive && (
               <RecordingPill
                 active
+                startedAt={sessionStartedAt}
                 label={status === "thinking" ? "Thinking" : "Recording"}
               />
             )}
