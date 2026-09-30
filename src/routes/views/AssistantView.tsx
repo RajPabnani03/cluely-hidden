@@ -55,9 +55,9 @@ import { CluelyLogo } from "../../components/CluelyLogo";
 import { SessionToolbar } from "../../components/SessionToolbar";
 import { CardShell } from "../../components/ui";
 import { cn } from "../../lib/utils";
+import { keyParts } from "../../lib/keys";
 
 type HeaderStatus = "ready" | "listening" | "thinking";
-type LiveStatus = "idle" | "ready" | "reconnecting" | "error";
 
 
 export function AssistantView() {
@@ -95,18 +95,27 @@ export function AssistantView() {
   const [showMenu, setShowMenu] = useState(false);
   const [showSessionDetails, setShowSessionDetails] = useState(false);
 
-  // ---- Phase 4: Live session state ----
-  const [liveStatus, setLiveStatus] = useState<LiveStatus>("idle");
-  const [statusMessage, setStatusMessage] = useState<string>("");
-  const [transcript, setTranscript] = useState<string>("");
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [sessionActive, setSessionActive] = useState(false);
+  // ---- Phase 4: Live session state (store-backed so it survives hide/show) ----
+  const liveStatus = useOverlayStore((s) => s.liveStatus);
+  const statusMessage = useOverlayStore((s) => s.statusMessage);
+  const transcript = useOverlayStore((s) => s.transcript);
+  const audioPlaying = useOverlayStore((s) => s.audioPlaying);
+  const sessionActive = useOverlayStore((s) => s.sessionActive);
+  const sessionStartedAt = useOverlayStore((s) => s.sessionStartedAt);
+  const lastCapture = useOverlayStore((s) => s.lastCapture);
+  const isMicRecording = useOverlayStore((s) => s.isMicRecording);
+  const micLevel = useOverlayStore((s) => s.micLevel);
+  const setLiveStatus = useOverlayStore((s) => s.setLiveStatus);
+  const setStatusMessage = useOverlayStore((s) => s.setStatusMessage);
+  const setTranscript = useOverlayStore((s) => s.setTranscript);
+  const appendTranscript = useOverlayStore((s) => s.appendTranscript);
+  const setAudioPlaying = useOverlayStore((s) => s.setAudioPlaying);
+  const setSessionActive = useOverlayStore((s) => s.setSessionActive);
+  const setLastCapture = useOverlayStore((s) => s.setLastCapture);
+  const setIsMicRecording = useOverlayStore((s) => s.setIsMicRecording);
+  const setMicLevel = useOverlayStore((s) => s.setMicLevel);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastCapture, setLastCapture] = useState<CaptureMeta | null>(null);
-  // ---- Microphone capture ----
-  const [isMicRecording, setIsMicRecording] = useState(false);
-  const [, setMicLevel] = useState<number>(-Infinity);
   const [vadMode, setVadMode] = useState<"aggressive" | "balanced" | "manual">(
     "balanced",
   );
@@ -120,12 +129,18 @@ export function AssistantView() {
   // Subscribe to the Phase 4 event bus. All unlistens are collected and
   // torn down on unmount.
   useEffect(() => {
+    let alive = true;
     const unlistens: UnlistenFn[] = [];
     unlistenRef.current = unlistens;
 
     const safe = (p: Promise<UnlistenFn>) =>
       p
-        .then((fn) => unlistens.push(fn))
+        .then((fn) => {
+          // A listener that resolves after cleanup must be released
+          // immediately, otherwise its handler fires twice forever.
+          if (alive) unlistens.push(fn);
+          else fn();
+        })
         .catch((err) => console.error("AssistantView listen failed:", err));
 
     // ai:status — payload is a free-form string. We bucket it into
@@ -156,7 +171,7 @@ export function AssistantView() {
       listen<string>("ai:transcript", (e) => {
         const chunk = e.payload ?? "";
         if (typeof chunk === "string" && chunk.length > 0) {
-          setTranscript((prev) => (prev + chunk).slice(-4000));
+          appendTranscript(chunk);
         }
       }),
     );
@@ -236,6 +251,7 @@ export function AssistantView() {
     safe(onSpeakable((text) => setSpeakableText(text)));
 
     return () => {
+      alive = false;
       for (const fn of unlistens) {
         try {
           fn();
@@ -306,6 +322,7 @@ export function AssistantView() {
       setSessionActive(false);
       setLiveStatus("idle");
       setStatusMessage("stopped");
+      setStreaming(false);
     } catch (err) {
       console.error("aiStopLive failed:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -317,6 +334,7 @@ export function AssistantView() {
     isMicRecording,
     messages,
     setConversationId,
+    setStreaming,
     transcript,
   ]);
 
@@ -423,6 +441,7 @@ export function AssistantView() {
   );
 
   useEffect(() => {
+    let alive = true;
     let unlisten: (() => void) | undefined;
     onShortcutTriggered((action) => {
       if (action === "next_step") {
@@ -454,10 +473,14 @@ export function AssistantView() {
       }
     })
       .then((fn) => {
-        unlisten = fn;
+        if (alive) unlisten = fn;
+        else fn();
       })
       .catch(console.error);
-    return () => unlisten?.();
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
   }, [
     applyCarouselIndex,
     responseIndex,
@@ -515,10 +538,7 @@ export function AssistantView() {
   const hintFor = (action: string, label: string) => {
     const row = hotkeyBindings.find(([a]) => a === action);
     if (!row) return { label, keys: ["?"] };
-    const keys = row[1].split("+").map((k) =>
-      k === "CmdOrCtrl" ? "Cmd" : k.replace(/^Arrow/, ""),
-    );
-    return { label, keys };
+    return { label, keys: keyParts(row[1]) };
   };
 
   if (overlayLayout === "compact") {
@@ -553,6 +573,7 @@ export function AssistantView() {
             {sessionActive && (
               <RecordingPill
                 active
+                startedAt={sessionStartedAt}
                 label={status === "thinking" ? "Thinking" : "Recording"}
               />
             )}
@@ -638,7 +659,7 @@ export function AssistantView() {
               <span>
                 Response {responseIndex + 1} / {responseSnapshots.length}
               </span>
-              <span className="text-zinc-600">⌘← · ⌘→</span>
+              <span className="text-zinc-600">⌘[ · ⌘]</span>
             </div>
           )}
           <ChatStream
@@ -663,6 +684,7 @@ export function AssistantView() {
             sessionActive={sessionActive}
             busy={busy}
             isMicRecording={isMicRecording}
+            micLevel={micLevel}
             audioPlaying={audioPlaying}
             vadMode={vadMode}
             onStartSession={onStartSession}

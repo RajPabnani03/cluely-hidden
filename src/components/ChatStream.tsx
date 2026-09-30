@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useOverlayStore } from "../lib/store";
 import { cn } from "../lib/utils";
 import type { QuickAction } from "./QuickActionChips";
@@ -113,10 +115,10 @@ export function ChatStream({
           <div
             key={m.id}
             className={cn(
-              "leading-relaxed whitespace-pre-wrap transition-opacity duration-150",
+              "leading-relaxed transition-opacity duration-150",
               isUser
-                ? "text-[11px] text-zinc-500"
-                : "text-[14px] text-zinc-100",
+                ? "text-[11px] text-zinc-500 whitespace-pre-wrap"
+                : "text-[14px] text-zinc-100 md-stream",
             )}
           >
             {isUser && (
@@ -124,7 +126,20 @@ export function ChatStream({
                 You
               </span>
             )}
-            {m.content}
+            {isUser ? (
+              m.content
+            ) : (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => (
+                    <span className="md-block">{children}</span>
+                  ),
+                }}
+              >
+                {m.content}
+              </ReactMarkdown>
+            )}
             {showCaret && <StreamingCursor />}
             {showDots && <TypingIndicator className="inline-flex ml-0.5" />}
           </div>

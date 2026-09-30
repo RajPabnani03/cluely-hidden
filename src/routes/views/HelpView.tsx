@@ -5,6 +5,8 @@ import { X } from "lucide-react";
 import { useRouter } from "../../lib/router";
 import { useOverlayStore } from "../../lib/store";
 import { cn } from "../../lib/utils";
+import { formatHotkey } from "../../lib/keys";
+import pkg from "../../../package.json";
 
 const HOTKEY_INFO: Array<{ action: string; label: string; description: string }> = [
   { action: "toggle_visibility", label: "Toggle overlay", description: "Show or hide the overlay window from anywhere." },
@@ -32,7 +34,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "Can I rebind hotkeys?",
-    a: "In-app rebinding is not yet wired. Edit src-tauri/tauri.conf.json and restart the app.",
+    a: "Yes — open Settings → Hotkeys and record a new combo for any action.",
   },
   {
     q: "Which AI providers are supported?",
@@ -83,7 +85,7 @@ export function HelpView() {
                     <div className="text-[11px] text-zinc-500">{h.description}</div>
                   </div>
                   <kbd className="shrink-0 font-mono text-[10px] bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-zinc-300 self-center">
-                    {map[h.action] ?? "—"}
+                    {map[h.action] ? formatHotkey(map[h.action]) : "—"}
                   </kbd>
                 </li>
               ))}
@@ -104,7 +106,7 @@ export function HelpView() {
           </Section>
 
           <footer className="pt-3 border-t border-zinc-800 text-[10px] text-zinc-500 flex items-center justify-between">
-            <span>Cluely Hidden v0.3.0</span>
+            <span>Cluely Hidden v{pkg.version}</span>
             <a
               href="https://github.com/rajpabnani/cluely-hidden"
               target="_blank"

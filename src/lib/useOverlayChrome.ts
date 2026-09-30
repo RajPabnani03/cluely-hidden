@@ -28,9 +28,15 @@ export function useOverlayChrome() {
   ]);
 
   useEffect(() => {
+    let alive = true;
     const unsubs: UnlistenFn[] = [];
     const safe = (p: Promise<UnlistenFn>) =>
-      p.then((fn) => unsubs.push(fn)).catch(console.error);
+      p
+        .then((fn) => {
+          if (alive) unsubs.push(fn);
+          else fn();
+        })
+        .catch(console.error);
 
     safe(
       listen<string>("overlay:navigate", (e) => {
@@ -63,6 +69,7 @@ export function useOverlayChrome() {
     );
 
     return () => {
+      alive = false;
       for (const fn of unsubs) {
         try {
           fn();

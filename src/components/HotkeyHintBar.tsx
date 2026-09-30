@@ -1,4 +1,3 @@
-import { Command } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export interface HotkeyHint {
@@ -55,7 +54,7 @@ function KeyCap({ children }: { children: React.ReactNode }) {
         "text-[10px] font-medium text-zinc-200 leading-none",
       )}
     >
-      {children === "Cmd" ? <Command className="w-2.5 h-2.5" /> : children}
+      {children}
     </span>
   );
 }
