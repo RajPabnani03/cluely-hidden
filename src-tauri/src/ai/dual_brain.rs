@@ -75,18 +75,17 @@ pub async fn gemini_flash_text(api_key: &str, user_message: &str) -> Result<Stri
         }
     });
 
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
-        api_key
-    );
+    let url =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
     let client = reqwest::Client::new();
     let resp = client
-        .post(&url)
+        .post(url)
+        .header("x-goog-api-key", api_key)
         .json(&body)
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Other(format!("gemini text: {e}")))?;
+        .map_err(|e| crate::error::AppError::Other(format!("gemini text: {}", e.without_url())))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -99,7 +98,7 @@ pub async fn gemini_flash_text(api_key: &str, user_message: &str) -> Result<Stri
     let v: serde_json::Value = resp
         .json()
         .await
-        .map_err(|e| crate::error::AppError::Other(format!("gemini parse: {e}")))?;
+        .map_err(|e| crate::error::AppError::Other(format!("gemini parse: {}", e.without_url())))?;
 
     let text = v
         .pointer("/candidates/0/content/parts/0/text")

@@ -1,7 +1,8 @@
 //! Gemini Live (Multimodal Live API) — bidi WebSocket client.
 //!
 //! Endpoint:
-//!   `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key={API_KEY}`
+//!   `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent`
+//!   (API key sent in the `x-goog-api-key` handshake header)
 //!
 //! Lifecycle:
 //!   1. [`GeminiLiveClient::connect`] dials the endpoint, sends a
@@ -27,7 +28,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, Mutex};
-use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
+use tokio_tungstenite::tungstenite::{client::IntoClientRequest, http::HeaderValue, Message};
 
 const WS_URL: &str = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
 const MODEL: &str = "models/gemini-live-2.5-flash-preview";
@@ -84,12 +85,10 @@ impl GeminiLiveClient {
         api_key: &str,
         system_instruction: &str,
     ) -> Result<Self, GeminiLiveError> {
-        let url = format!("{WS_URL}?key={api_key}");
-
         // Open the connection and send the setup envelope on this
         // stack frame so we can hand the split halves off cleanly to
         // the writer / reader tasks.
-        let ws_stream = dial(&url).await?;
+        let ws_stream = dial(api_key).await?;
         let (mut ws_sink, ws_read) = ws_stream.split();
         send_setup(&mut ws_sink, system_instruction).await?;
 
@@ -168,20 +167,25 @@ impl GeminiLiveClient {
 
 /// Open a TLS WebSocket connection to the Gemini Live endpoint.
 async fn dial(
-    url: &str,
+    api_key: &str,
 ) -> Result<
     tokio_tungstenite::WebSocketStream<
         tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
     >,
     GeminiLiveError,
 > {
-    let mut request = url.into_client_request()?;
-    request.headers_mut().insert(
+    let mut request = WS_URL.into_client_request()?;
+    let headers = request.headers_mut();
+    headers.insert(
         "Origin",
         "https://generativelanguage.googleapis.com"
             .parse()
             .expect("valid header value"),
     );
+    let mut key_header = HeaderValue::from_str(api_key)
+        .map_err(|_| GeminiLiveError::Other("invalid Gemini API key".into()))?;
+    key_header.set_sensitive(true);
+    headers.insert("x-goog-api-key", key_header);
     let (ws_stream, _resp) = tokio_tungstenite::connect_async(request).await?;
     Ok(ws_stream)
 }
@@ -234,7 +238,6 @@ async fn run_reader_with_reconnect(
     // we reconnect up to MAX_RECONNECT_ATTEMPTS times.
     let _ = drain(&app, ws_read).await;
 
-    let url = format!("{WS_URL}?key={api_key}");
     for attempt in 0..MAX_RECONNECT_ATTEMPTS {
         log::warn!(
             "gemini-live: connection lost; reconnect attempt {}/{} in {RECONNECT_DELAY_MS}ms",
@@ -247,7 +250,7 @@ async fn run_reader_with_reconnect(
         );
         tokio::time::sleep(std::time::Duration::from_millis(RECONNECT_DELAY_MS)).await;
 
-        match open_and_drain(&app, &url, system_instruction).await {
+        match open_and_drain(&app, api_key, system_instruction).await {
             Ok(()) => return,
             Err(e) => {
                 log::warn!("gemini-live: reconnect attempt {attempt} failed: {e}");
@@ -291,10 +294,10 @@ async fn drain(
 /// (Re-)open a socket and drain it.
 async fn open_and_drain(
     app: &AppHandle,
-    url: &str,
+    api_key: &str,
     system_instruction: &str,
 ) -> Result<(), GeminiLiveError> {
-    let ws_stream = dial(url).await?;
+    let ws_stream = dial(api_key).await?;
     let (mut ws_sink, ws_read) = ws_stream.split();
     send_setup(&mut ws_sink, system_instruction).await?;
     drain(app, ws_read).await
