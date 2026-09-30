@@ -14,12 +14,14 @@ interface QuickActionChipsProps {
 
 const CHIPS: Array<{
   value: QuickAction;
+  /** Long form — tooltip / aria-label. */
   label: string;
+  /** Shown on the chip; sized to fit all four inside the card. */
   short: string;
   icon: ComponentType<{ className?: string }>;
 }> = [
   { value: "assist", label: "Assist", short: "Assist", icon: Sparkles },
-  { value: "say", label: "What should I say?", short: "Say", icon: MessageCircle },
+  { value: "say", label: "What should I say?", short: "What to say", icon: MessageCircle },
   { value: "followup", label: "Follow-up questions", short: "Follow-up", icon: ListRestart },
   { value: "recap", label: "Recap", short: "Recap", icon: RotateCcw },
 ];
@@ -43,9 +45,10 @@ export function QuickActionChips({ active, onSelect }: QuickActionChipsProps) {
             type="button"
             role="tab"
             aria-selected={selected}
+            aria-label={label}
             onClick={() => onSelect?.(value)}
             className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium",
+              "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium",
               "whitespace-nowrap transition-all duration-150",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
               selected
@@ -55,8 +58,7 @@ export function QuickActionChips({ active, onSelect }: QuickActionChipsProps) {
             title={label}
           >
             <Icon className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden sm:inline">{label}</span>
-            <span className="sm:hidden">{short}</span>
+            {short}
           </button>
         );
       })}

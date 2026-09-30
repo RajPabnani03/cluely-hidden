@@ -26,26 +26,36 @@ export default function App() {
 
   // Visibility event from Rust (hotkey / tray)
   useEffect(() => {
+    let alive = true;
     let unlisten: (() => void) | undefined;
     onOverlayVisibilityChange((v) => setVisible(v))
       .then((fn) => {
-        unlisten = fn;
+        if (alive) unlisten = fn;
+        else fn();
       })
       .catch(console.error);
-    return () => unlisten?.();
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
   }, [setVisible]);
 
   // Emergency erase — wipe in-memory state
   useEffect(() => {
+    let alive = true;
     let unlisten: (() => void) | undefined;
     onClearSensitiveData(() => {
       resetSensitiveState();
     })
       .then((fn) => {
-        unlisten = fn;
+        if (alive) unlisten = fn;
+        else fn();
       })
       .catch(console.error);
-    return () => unlisten?.();
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
   }, [resetSensitiveState]);
 
   useEffect(() => {

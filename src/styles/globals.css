@@ -154,4 +154,45 @@
   .animate-fade-in {
     animation: fade-in 0.22s ease-out both;
   }
+
+  /* Assistant-message markdown rendering (react-markdown + remark-gfm). */
+  .md-block {
+    @apply block mb-2 last:mb-0;
+  }
+  .md-stream strong {
+    @apply font-semibold text-white;
+  }
+  .md-stream ul {
+    @apply list-disc pl-5 my-1.5 space-y-1;
+  }
+  .md-stream ol {
+    @apply list-decimal pl-5 my-1.5 space-y-1;
+  }
+  .md-stream code {
+    @apply bg-zinc-800/90 border border-zinc-700/60 rounded px-1 py-0.5 text-[0.9em] font-mono text-zinc-200;
+  }
+  .md-stream pre {
+    @apply bg-zinc-950/80 border border-zinc-800 rounded-lg p-2.5 my-2 overflow-x-auto scrollbar-thin;
+  }
+  .md-stream pre code {
+    @apply bg-transparent border-0 p-0;
+  }
+  .md-stream a {
+    @apply text-blue-400 underline underline-offset-2;
+  }
+  .md-stream blockquote {
+    @apply border-l-2 border-zinc-700 pl-3 my-2 text-zinc-400;
+  }
+  .md-stream em {
+    @apply text-zinc-300;
+  }
+  .md-stream h1, .md-stream h2, .md-stream h3, .md-stream h4 {
+    @apply font-semibold text-zinc-50 mt-3 mb-1;
+  }
+  .md-stream table {
+    @apply text-[12px] my-2;
+  }
+  .md-stream th, .md-stream td {
+    @apply border border-zinc-800 px-2 py-1 text-left;
+  }
 }

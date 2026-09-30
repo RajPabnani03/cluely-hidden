@@ -55,6 +55,7 @@ import { CluelyLogo } from "../../components/CluelyLogo";
 import { SessionToolbar } from "../../components/SessionToolbar";
 import { CardShell } from "../../components/ui";
 import { cn } from "../../lib/utils";
+import { keyParts } from "../../lib/keys";
 
 type HeaderStatus = "ready" | "listening" | "thinking";
 type LiveStatus = "idle" | "ready" | "reconnecting" | "error";
@@ -106,7 +107,7 @@ export function AssistantView() {
   const [lastCapture, setLastCapture] = useState<CaptureMeta | null>(null);
   // ---- Microphone capture ----
   const [isMicRecording, setIsMicRecording] = useState(false);
-  const [, setMicLevel] = useState<number>(-Infinity);
+  const [micLevel, setMicLevel] = useState<number>(-Infinity);
   const [vadMode, setVadMode] = useState<"aggressive" | "balanced" | "manual">(
     "balanced",
   );
@@ -120,12 +121,18 @@ export function AssistantView() {
   // Subscribe to the Phase 4 event bus. All unlistens are collected and
   // torn down on unmount.
   useEffect(() => {
+    let alive = true;
     const unlistens: UnlistenFn[] = [];
     unlistenRef.current = unlistens;
 
     const safe = (p: Promise<UnlistenFn>) =>
       p
-        .then((fn) => unlistens.push(fn))
+        .then((fn) => {
+          // A listener that resolves after cleanup must be released
+          // immediately, otherwise its handler fires twice forever.
+          if (alive) unlistens.push(fn);
+          else fn();
+        })
         .catch((err) => console.error("AssistantView listen failed:", err));
 
     // ai:status — payload is a free-form string. We bucket it into
@@ -236,6 +243,7 @@ export function AssistantView() {
     safe(onSpeakable((text) => setSpeakableText(text)));
 
     return () => {
+      alive = false;
       for (const fn of unlistens) {
         try {
           fn();
@@ -423,6 +431,7 @@ export function AssistantView() {
   );
 
   useEffect(() => {
+    let alive = true;
     let unlisten: (() => void) | undefined;
     onShortcutTriggered((action) => {
       if (action === "next_step") {
@@ -454,10 +463,14 @@ export function AssistantView() {
       }
     })
       .then((fn) => {
-        unlisten = fn;
+        if (alive) unlisten = fn;
+        else fn();
       })
       .catch(console.error);
-    return () => unlisten?.();
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
   }, [
     applyCarouselIndex,
     responseIndex,
@@ -515,10 +528,7 @@ export function AssistantView() {
   const hintFor = (action: string, label: string) => {
     const row = hotkeyBindings.find(([a]) => a === action);
     if (!row) return { label, keys: ["?"] };
-    const keys = row[1].split("+").map((k) =>
-      k === "CmdOrCtrl" ? "Cmd" : k.replace(/^Arrow/, ""),
-    );
-    return { label, keys };
+    return { label, keys: keyParts(row[1]) };
   };
 
   if (overlayLayout === "compact") {
@@ -638,7 +648,7 @@ export function AssistantView() {
               <span>
                 Response {responseIndex + 1} / {responseSnapshots.length}
               </span>
-              <span className="text-zinc-600">⌘← · ⌘→</span>
+              <span className="text-zinc-600">⌘[ · ⌘]</span>
             </div>
           )}
           <ChatStream
@@ -663,6 +673,7 @@ export function AssistantView() {
             sessionActive={sessionActive}
             busy={busy}
             isMicRecording={isMicRecording}
+            micLevel={micLevel}
             audioPlaying={audioPlaying}
             vadMode={vadMode}
             onStartSession={onStartSession}

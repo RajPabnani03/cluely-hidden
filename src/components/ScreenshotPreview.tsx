@@ -25,6 +25,7 @@ export function ScreenshotPreview() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    let alive = true;
     let unlisten: UnlistenFn | undefined;
     const sub = listen<ScreenshotMeta>("capture:screen", (e) => {
       setCapture(e.payload);
@@ -32,10 +33,12 @@ export function ScreenshotPreview() {
     });
     sub
       .then((fn) => {
-        unlisten = fn;
+        if (alive) unlisten = fn;
+        else fn();
       })
       .catch(console.error);
     return () => {
+      alive = false;
       unlisten?.();
     };
   }, []);

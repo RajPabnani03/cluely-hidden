@@ -3,12 +3,15 @@
  */
 import { Camera, Mic, MicOff, StopCircle, Volume2 } from "lucide-react";
 import { MicButton } from "./MicButton";
+import { VuMeter } from "./VuMeter";
 import { cn } from "../lib/utils";
 
 export interface SessionToolbarProps {
   sessionActive: boolean;
   busy: boolean;
   isMicRecording: boolean;
+  /** Live RMS level in dBFS fed from `mic:level` events. */
+  micLevel?: number;
   audioPlaying: boolean;
   vadMode: "aggressive" | "balanced" | "manual";
   onStartSession: () => void;
@@ -34,6 +37,7 @@ export function SessionToolbar({
   onCapture,
   onStartMic,
   onStopMic,
+  micLevel = -Infinity,
   transcript,
   error,
   expandedDetails,
@@ -114,10 +118,7 @@ export function SessionToolbar({
                 Speaking
               </>
             ) : isMicRecording ? (
-              <>
-                <Mic className="w-3 h-3 text-emerald-400" />
-                Mic on
-              </>
+              <VuMeter level={micLevel} segments={4} className="!px-1.5 !py-0.5" />
             ) : (
               <>
                 <MicOff className="w-3 h-3" />

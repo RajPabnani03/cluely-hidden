@@ -23,6 +23,7 @@ import {
 } from "../../lib/tauri";
 import { HotkeyRebindSection } from "../../components/HotkeyRebindSection";
 import { useOverlayStore } from "../../lib/store";
+import { formatHotkey } from "../../lib/keys";
 
 const MODEL_OPTIONS = [
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (fast)" },
@@ -280,7 +281,7 @@ export function SettingsView() {
               <Section title="Toggle hotkey">
                 <Row label="Show / hide overlay">
                   <kbd className="font-mono text-xs bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-200">
-                    {settings.hotkey}
+                    {formatHotkey(settings.hotkey)}
                   </kbd>
                 </Row>
               </Section>
