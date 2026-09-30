@@ -620,7 +620,8 @@ pub fn vault_index_folder(
     folder_path: String,
 ) -> Result<usize> {
     let path = expand_user_path(&folder_path);
-    crate::db::vault::index_folder(&conn(&state), &path)
+    let chunks = crate::db::vault::collect_chunks(&path)?;
+    crate::db::vault::replace_chunks(&mut conn(&state), &chunks)
 }
 
 fn expand_user_path(p: &str) -> std::path::PathBuf {
