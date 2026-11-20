@@ -5,7 +5,7 @@ import { Camera, Mic, MicOff, StopCircle, Volume2 } from "lucide-react";
 import { MicButton } from "./MicButton";
 import { cn } from "../lib/utils";
 
-export interface SessionToolbarProps {
+interface SessionToolbarProps {
   sessionActive: boolean;
   busy: boolean;
   isMicRecording: boolean;

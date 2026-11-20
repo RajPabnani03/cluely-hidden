@@ -28,8 +28,3 @@ pub fn set_gemini_api_key(key: &str) -> Result<()> {
         .set_password(trimmed)
         .map_err(|e| AppError::Other(format!("keychain write: {e}")))
 }
-
-/// Remove Gemini key from Keychain (e.g. user clears field).
-pub fn clear_gemini_api_key() -> Result<()> {
-    set_gemini_api_key("")
-}

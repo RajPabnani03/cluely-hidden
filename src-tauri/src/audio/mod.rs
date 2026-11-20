@@ -20,5 +20,3 @@
 //!   the `log` crate, which writes to stderr).
 
 pub mod mic;
-
-pub use mic::{start_capture, MicCapture};

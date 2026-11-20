@@ -115,17 +115,14 @@ pub fn run() {
         // ---------- IPC commands ----------
         .invoke_handler(tauri::generate_handler![
             ipc::commands::toggle_overlay,
-            ipc::commands::show_overlay,
             ipc::commands::hide_overlay,
             ipc::commands::set_click_through,
             ipc::commands::open_settings,
-            ipc::commands::quit_app,
             ipc::commands::get_settings,
             ipc::commands::update_settings,
             ipc::commands::chat,
             ipc::commands::get_hotkey_bindings,
             ipc::commands::rebind_hotkey,
-            ipc::commands::cycle_stealth_tier,
             ipc::commands::set_overlay_layout,
             // ---- Phase 3A — Database ----
             ipc::commands::list_profiles,
@@ -139,12 +136,9 @@ pub fn run() {
             ipc::commands::delete_conversation,
             ipc::commands::list_messages,
             ipc::commands::save_message,
-            ipc::commands::create_capture,
-            ipc::commands::get_capture,
             // ---- Phase 3B — Capture pipeline ----
             ipc::commands::capture_screen,
             // ---- Phase 5 — AI Live (Gemini bidi WebSocket) ----
-            ipc::commands::ai_start_live,
             ipc::commands::ai_start_live_configured,
             ipc::commands::ai_send_audio,
             ipc::commands::ai_stop_live,
@@ -156,7 +150,6 @@ pub fn run() {
             ipc::commands::export_conversation_markdown,
             ipc::commands::wipe_local_data,
             ipc::commands::vault_index_folder,
-            ipc::commands::vault_query,
             ipc::commands::calendar_hints,
         ])
         .run(tauri::generate_context!())

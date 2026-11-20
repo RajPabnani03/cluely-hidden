@@ -20,11 +20,6 @@ pub fn toggle_overlay(app: AppHandle) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn show_overlay(app: AppHandle) -> Result<()> {
-    helpers::show(&app)
-}
-
-#[tauri::command]
 pub fn hide_overlay(app: AppHandle) -> Result<()> {
     helpers::hide(&app)
 }
@@ -37,11 +32,6 @@ pub fn set_click_through(app: AppHandle, enabled: bool) -> Result<()> {
 #[tauri::command]
 pub fn open_settings(app: AppHandle) -> Result<()> {
     helpers::open_settings(&app)
-}
-
-#[tauri::command]
-pub fn quit_app(app: AppHandle) {
-    helpers::quit(&app);
 }
 
 // ---------- Settings ----------
@@ -83,14 +73,6 @@ pub fn rebind_hotkey(
     registry.rebind(&app, action_enum, new_key.clone())?;
     settings.set_hotkey_override(&action, &new_key)?;
     Ok(())
-}
-
-#[tauri::command]
-pub fn cycle_stealth_tier(
-    app: AppHandle,
-    settings: tauri::State<'_, SettingsState>,
-) -> Result<()> {
-    crate::window::stealth::cycle_stealth_tier(&app, &settings)
 }
 
 #[tauri::command]
@@ -276,28 +258,6 @@ pub fn save_message(
     Ok(message)
 }
 
-// ---- Captures ----
-
-#[tauri::command]
-pub fn create_capture(
-    state: tauri::State<'_, DbState>,
-    kind: String,
-    file_path: String,
-    width: Option<i32>,
-    height: Option<i32>,
-    duration_ms: Option<i64>,
-) -> Result<crate::db::captures::Capture> {
-    crate::db::captures::create(&conn(&state), kind, file_path, width, height, duration_ms)
-}
-
-#[tauri::command]
-pub fn get_capture(
-    state: tauri::State<'_, DbState>,
-    id: String,
-) -> Result<Option<crate::db::captures::Capture>> {
-    crate::db::captures::get(&conn(&state), &id)
-}
-
 // ---------- Phase 5 — AI Live WebSocket session ----------
 //
 // Thin IPC wrappers around `crate::ai::GeminiLiveClient`. The
@@ -315,18 +275,6 @@ impl Default for AiState {
     fn default() -> Self {
         AiState(std::sync::Mutex::new(None))
     }
-}
-
-/// Open a new Gemini Live session and stash the handle in
-/// `AiState`. Errors are surfaced to the frontend as strings.
-#[tauri::command]
-pub async fn ai_start_live(
-    app: AppHandle,
-    state: tauri::State<'_, AiState>,
-    api_key: String,
-    system_instruction: String,
-) -> std::result::Result<(), String> {
-    ai_start_live_impl(&app, &state, api_key.trim(), system_instruction).await
 }
 
 /// Start Gemini Live using the stored API key and active profile (or first profile).
@@ -429,7 +377,7 @@ pub async fn ai_send_audio_impl(
             None => {
                 // No active AI session — silently drop the chunk.
                 // This is normal when capture is started before
-                // `ai_start_live` or after `ai_stop_live`.
+                // `ai_start_live_configured` or after `ai_stop_live`.
                 return Ok(());
             }
         }
@@ -630,15 +578,6 @@ fn expand_user_path(p: &str) -> std::path::PathBuf {
         }
     }
     std::path::PathBuf::from(p)
-}
-
-#[tauri::command]
-pub fn vault_query(
-    state: tauri::State<'_, DbState>,
-    query: String,
-    limit: Option<usize>,
-) -> Result<Vec<crate::db::vault::VaultHit>> {
-    crate::db::vault::query(&conn(&state), &query, limit.unwrap_or(8))
 }
 
 #[tauri::command]

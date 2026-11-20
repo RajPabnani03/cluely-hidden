@@ -2,7 +2,6 @@ import {
   createConversation,
   saveMessage,
   updateConversationTitle,
-  getSettings,
   type ChatMessage,
 } from "./tauri";
 
@@ -57,14 +56,5 @@ export async function persistLiveSessionToHistory(args: {
   } catch (e) {
     console.error("persistLiveSessionToHistory failed:", e);
     return convId;
-  }
-}
-
-export async function loadOverlayOpacity(): Promise<number> {
-  try {
-    const s = await getSettings();
-    return s.overlayOpacity ?? 0.92;
-  } catch {
-    return 0.92;
   }
 }

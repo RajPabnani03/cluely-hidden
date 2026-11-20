@@ -52,32 +52,6 @@ pub fn index_folder(conn: &Connection, folder: &Path) -> Result<usize> {
     Ok(count)
 }
 
-pub fn query(conn: &Connection, q: &str, limit: usize) -> Result<Vec<VaultHit>> {
-    let pattern = format!("%{}%", q.trim());
-    let lim = limit.min(20) as i64;
-    let mut stmt = conn.prepare(
-        "SELECT source_path, chunk_text FROM vault_chunks WHERE chunk_text LIKE ?1 LIMIT ?2",
-    )?;
-    let rows = stmt.query_map(params![pattern, lim], |r| {
-        Ok(VaultHit {
-            source_path: r.get(0)?,
-            chunk_text: r.get(1)?,
-        })
-    })?;
-    let mut out = Vec::new();
-    for r in rows {
-        out.push(r?);
-    }
-    Ok(out)
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultHit {
-    pub source_path: String,
-    pub chunk_text: String,
-}
-
 fn chunk_text(s: &str) -> Vec<String> {
     let t = s.trim();
     if t.is_empty() {
