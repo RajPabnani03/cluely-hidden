@@ -251,34 +251,32 @@ export const ALL_PROFILE_IDS: ProfileId[] = [
 
 /**
  * Build the full system prompt from a profile + custom context.
- * Mirrors cheating-daddy's `buildSystemPrompt(promptParts, customPrompt, googleSearchEnabled)`.
  *
  * Layout:
  *   {intro}\n\n{formatRequirements}
- *   [+\n\n{searchUsage} if googleSearchEnabled]
+ *   \n\n{searchUsage}
  *   \n\n{content}
  *   \n\nUser-provided context\n-----\n{customPrompt}\n-----\n
  *   {outputInstructions}
  */
-export function buildSystemPrompt(
+function buildSystemPrompt(
   profile: ProfileId,
   customPrompt: string = "",
-  googleSearchEnabled: boolean = true,
 ): string {
   const parts = BUILTIN_PROFILES[profile] || BUILTIN_PROFILES.interview;
-  const sections: string[] = [parts.intro, "\n\n", parts.formatRequirements];
-  if (googleSearchEnabled) {
-    sections.push("\n\n", parts.searchUsage);
-  }
-  sections.push(
+  return [
+    parts.intro,
+    "\n\n",
+    parts.formatRequirements,
+    "\n\n",
+    parts.searchUsage,
     "\n\n",
     parts.content,
     "\n\nUser-provided context\n-----\n",
     customPrompt,
     "\n-----\n\n",
     parts.outputInstructions,
-  );
-  return sections.join("");
+  ].join("");
 }
 
 /**
@@ -301,7 +299,7 @@ export async function syncBuiltinProfilesToDb(): Promise<void> {
         dbProfile &&
         (!dbProfile.system_prompt || dbProfile.system_prompt.trim() === "")
       ) {
-        const fullPrompt = buildSystemPrompt(profileId, "", true);
+        const fullPrompt = buildSystemPrompt(profileId);
         await updateProfile(profileId, undefined, fullPrompt);
       }
     }
