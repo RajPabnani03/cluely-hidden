@@ -64,5 +64,3 @@ export function ScreenshotTray({
     </div>
   );
 }
-
-export { MAX_TRAY };

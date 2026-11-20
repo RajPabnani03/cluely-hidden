@@ -58,25 +58,6 @@ impl HotkeyAction {
         }
     }
 
-    /// Human-readable label for the UI
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::ToggleVisibility => "Toggle Overlay",
-            Self::NextStep => "Next Step (Start / Screenshot)",
-            Self::EmergencyErase => "Emergency Erase",
-            Self::ToggleClickThrough => "Toggle Click-Through",
-            Self::MoveUp => "Move Window Up",
-            Self::MoveDown => "Move Window Down",
-            Self::MoveLeft => "Move Window Left",
-            Self::MoveRight => "Move Window Right",
-            Self::PreviousResponse => "Previous Response",
-            Self::NextResponse => "Next Response",
-            Self::ScrollUp => "Scroll Up",
-            Self::ScrollDown => "Scroll Down",
-            Self::CycleStealthTier => "Cycle Stealth (Ghost/Glass/Focus)",
-        }
-    }
-
     /// Default key combo (cross-platform format the global-shortcut plugin accepts)
     pub fn default_key(&self) -> &'static str {
         match self {
@@ -212,9 +193,4 @@ fn emergency_erase(app: &AppHandle) -> Result<()> {
     });
 
     Ok(())
-}
-
-/// Find a HotkeyAction by its key string (for unregistration lookups)
-pub fn from_key<'a>(key: &'a str) -> Option<HotkeyAction> {
-    HotkeyAction::all().iter().find(|a| a.default_key() == key).copied()
 }

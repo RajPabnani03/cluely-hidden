@@ -11,7 +11,7 @@
  * Phase 4: this view subscribes to the Rust event bus
  * (`ai:status`, `ai:transcript`, `ai:response:text`, `ai:response:audio`,
  * `ai:turn:complete`) and exposes the new IPC commands
- * (`aiStartLive`, `aiStopLive`, `aiSendAudio`, `captureScreen`).
+ * (`aiStartLiveConfigured`, `aiStopLive`, `captureScreen`).
  *
  * Uses the zinc palette + glassmorphism from the official UX.
  */
@@ -213,7 +213,7 @@ export function AssistantView() {
     );
 
     // mic:level — RMS audio level in dBFS from the Rust audio pipeline.
-    // Forwarded into the VuMeter. -Infinity is a valid sentinel for "silence".
+    // Forwarded into the session toolbar. -Infinity is a valid sentinel for "silence".
     safe(
       listen<MicLevel>("mic:level", (e) => {
         const v = e.payload?.rmsDb;
@@ -273,7 +273,7 @@ export function AssistantView() {
       clearMessages();
       setStreaming(false);
     } catch (err) {
-      console.error("aiStartLive failed:", err);
+      console.error("aiStartLiveConfigured failed:", err);
       setError(err instanceof Error ? err.message : String(err));
       setLiveStatus("error");
     } finally {

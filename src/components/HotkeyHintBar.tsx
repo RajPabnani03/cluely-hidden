@@ -1,7 +1,7 @@
 import { Command } from "lucide-react";
 import { cn } from "../lib/utils";
 
-export interface HotkeyHint {
+interface HotkeyHint {
   /** Display label, e.g. "Hide", "Stop session", "Assist" */
   label: string;
   /** Keyboard combo parts. Each part renders as a keycap. */

@@ -42,11 +42,6 @@ impl HotkeyRegistry {
             .collect()
     }
 
-    /// Returns the key currently bound to the given action
-    pub fn key_for(&self, action: HotkeyAction) -> Option<String> {
-        self.bindings.get(&action).cloned()
-    }
-
     /// Register all 11 hotkeys with the global shortcut plugin.
     ///
     /// Uses `on_shortcut` per-key so each handler knows which action it serves.
@@ -82,18 +77,6 @@ impl HotkeyRegistry {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        Ok(())
-    }
-
-    /// Unregister all current hotkeys
-    pub fn unregister_all(&self, app: &AppHandle) -> Result<()> {
-        for key in self.bindings.values() {
-            let shortcut: Shortcut = key
-                .parse()
-                .map_err(|e| crate::error::AppError::Other(format!("invalid key '{key}': {e}")))?;
-            let _ = app.global_shortcut().unregister(shortcut);
-        }
-        log::info!("unregistered {} hotkeys", self.bindings.len());
         Ok(())
     }
 

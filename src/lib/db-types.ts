@@ -3,8 +3,7 @@
  *
  * Rust types live in `src-tauri/src/db/models.rs` (or wherever the
  * Phase 3A agent put them). These interfaces must match the shape of
- * what `list_profiles`, `list_conversations`, `list_messages`, and
- * `list_captures` return from IPC.
+ * what `list_profiles`, `list_conversations`, and `list_messages` return from IPC.
  *
  * Convention: timestamps are Unix epoch **milliseconds** (i64 in Rust,
  * number in TS). All ids are opaque strings (UUIDv4 from the Rust side).
@@ -43,16 +42,5 @@ export interface DbMessage {
   model: string | null;
   tokens_in: number | null;
   tokens_out: number | null;
-  created_at: number;
-}
-
-/** A captured screenshot or audio chunk on disk. */
-export interface DbCapture {
-  id: string;
-  kind: "screen" | "audio";
-  file_path: string;
-  width: number | null;
-  height: number | null;
-  duration_ms: number | null;
   created_at: number;
 }

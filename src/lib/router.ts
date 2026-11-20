@@ -8,19 +8,11 @@
 
 import { create } from "zustand";
 
-export type ViewId =
+type ViewId =
   | "assistant"
   | "settings"
   | "history"
   | "help";
-
-/** Human-readable label for menus / tooltips. */
-export const VIEW_LABELS: Record<ViewId, string> = {
-  assistant: "Assistant",
-  settings: "Settings",
-  history: "History",
-  help: "Help",
-};
 
 interface RouterState {
   currentView: ViewId;
@@ -33,6 +25,3 @@ export const useRouter = create<RouterState>((set) => ({
   setView: (v) => set({ currentView: v }),
   backToAssistant: () => set({ currentView: "assistant" }),
 }));
-
-/** Convenience: secondary overlay views. */
-export const SECONDARY_VIEWS: ViewId[] = ["settings", "history", "help"];

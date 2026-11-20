@@ -4,7 +4,7 @@
 //! profile. Deleting a conversation cascades to its messages
 //! (`ON DELETE CASCADE` in the schema).
 
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -32,18 +32,6 @@ pub fn list(conn: &Connection) -> Result<Vec<Conversation>> {
         out.push(r?);
     }
     Ok(out)
-}
-
-pub fn get(conn: &Connection, id: &str) -> Result<Option<Conversation>> {
-    let c = conn
-        .query_row(
-            "SELECT id, title, profile_id, created_at, updated_at \
-             FROM conversations WHERE id = ?1",
-            params![id],
-            row_to_conversation,
-        )
-        .optional()?;
-    Ok(c)
 }
 
 /// Create a new empty conversation. `profile_id` is optional — the

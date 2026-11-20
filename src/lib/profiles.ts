@@ -9,7 +9,7 @@
  * Text is ported unchanged — same wording, same examples. Do not paraphrase.
  */
 
-export interface PromptProfileParts {
+interface PromptProfileParts {
   intro: string;
   formatRequirements: string;
   searchUsage: string;
@@ -17,7 +17,7 @@ export interface PromptProfileParts {
   outputInstructions: string;
 }
 
-export type ProfileId =
+type ProfileId =
   | "interview"
   | "sales"
   | "meeting"
@@ -26,7 +26,7 @@ export type ProfileId =
   | "exam";
 
 /** The 6 builtin profiles with their full prompt templates (verbatim port). */
-export const BUILTIN_PROFILES: Record<ProfileId, PromptProfileParts> = {
+const BUILTIN_PROFILES: Record<ProfileId, PromptProfileParts> = {
   interview: {
     intro: `You are an AI-powered interview assistant, designed to act as a discreet on-screen teleprompter. Your mission is to help the user excel in their job interview by providing concise, impactful, and ready-to-speak answers or key talking points. Analyze the ongoing interview dialogue and, crucially, the 'User-provided context' below.`,
 
@@ -229,18 +229,8 @@ Provide direct exam answers in **markdown format**. Include the question text, t
   },
 };
 
-/** Human-readable labels for the UI. */
-export const PROFILE_LABELS: Record<ProfileId, string> = {
-  interview: "Interview",
-  sales: "Sales",
-  meeting: "Meeting",
-  presentation: "Presentation",
-  negotiation: "Negotiation",
-  exam: "Exam",
-};
-
 /** All builtin profile IDs in display order. */
-export const ALL_PROFILE_IDS: ProfileId[] = [
+const ALL_PROFILE_IDS: ProfileId[] = [
   "interview",
   "sales",
   "meeting",

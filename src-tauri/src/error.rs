@@ -27,12 +27,6 @@ pub enum CaptureError {
     #[error("failed to build input audio stream: {0}")]
     StreamBuildFailed(String),
 
-    #[error("audio resampling failed: {0}")]
-    ResampleFailed(String),
-
-    #[error("cpal error: {0}")]
-    Cpal(String),
-
     #[error("audio stream config error: {0}")]
     AudioConfig(String),
 }
@@ -53,9 +47,6 @@ pub enum AppError {
 
     #[error("window '{0}' not found")]
     WindowNotFound(String),
-
-    #[error("settings error: {0}")]
-    Settings(String),
 
     #[error("database error: {0}")]
     Database(String),

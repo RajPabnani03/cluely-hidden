@@ -10,7 +10,7 @@
 //! referencing the returned path.
 
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::Utc;
 use uuid::Uuid;
@@ -112,13 +112,4 @@ fn encode_png(rgba: &image::RgbaImage) -> Result<Vec<u8>, CaptureError> {
 /// `<data_dir>/captures/` — where PNG screenshots are persisted.
 fn captures_dir() -> PathBuf {
     data_dir().join("captures")
-}
-
-/// Test-only helper: expose the captures dir resolver so unit tests can
-/// assert the layout without taking a real screenshot.
-#[allow(dead_code)]
-pub(crate) fn captures_dir_for_tests() -> &'static Path {
-    // Returns the static `captures` segment; tests combine with their
-    // own tempdir. Not used in production.
-    Path::new("captures")
 }

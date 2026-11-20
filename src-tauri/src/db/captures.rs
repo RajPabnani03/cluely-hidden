@@ -1,11 +1,11 @@
-//! `captures` table CRUD.
+//! `captures` table inserts.
 //!
 //! Captures are the artifacts we record as part of a session:
 //! screenshots of the user's screen and audio recordings from the mic.
 //! Messages can reference a capture via `screenshot_id` so the assistant
 //! can "see" what the user saw when interpreting the transcript.
 
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -51,29 +51,5 @@ pub fn create(
         height,
         duration_ms,
         created_at: now,
-    })
-}
-
-pub fn get(conn: &Connection, id: &str) -> Result<Option<Capture>> {
-    let c = conn
-        .query_row(
-            "SELECT id, kind, file_path, width, height, duration_ms, created_at \
-             FROM captures WHERE id = ?1",
-            params![id],
-            row_to_capture,
-        )
-        .optional()?;
-    Ok(c)
-}
-
-fn row_to_capture(row: &Row<'_>) -> rusqlite::Result<Capture> {
-    Ok(Capture {
-        id: row.get("id")?,
-        kind: row.get("kind")?,
-        file_path: row.get("file_path")?,
-        width: row.get("width")?,
-        height: row.get("height")?,
-        duration_ms: row.get("duration_ms")?,
-        created_at: row.get("created_at")?,
     })
 }
