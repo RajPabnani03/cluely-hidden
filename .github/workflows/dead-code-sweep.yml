@@ -1,0 +1,37 @@
+name: Weekly dead code sweep
+
+on:
+  schedule:
+    - cron: "23 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Report unused frontend files, exports and dependencies
+        run: npm exec --yes --package=knip@6.46.1 -- knip --config .github/knip.json --no-exit-code --reporter github-actions
+
+      - name: Generate Tauri icons
+        run: python3 gen-icons.py
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Report Rust compiler dead-code warnings
+        working-directory: src-tauri
+        run: cargo check --all-targets
